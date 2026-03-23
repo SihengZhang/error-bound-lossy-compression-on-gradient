@@ -72,13 +72,16 @@ python python_scripts/generate_cone_function_field.py
 - REL error bound: `|error| > rel_bound × (max - min)` (same as SZ3)
 - Example: `python python_scripts/compare_fields.py ground.raw test.raw 512 512 output --rel 1e-3`
 
-**gradient_matrix.py** - Generates central difference gradient as sparse matrices
-- Output: `_Dx.npz`, `_Dy.npz` (scipy sparse CSR format)
+**gradient_matrix.py** - Generates differential operators as sparse matrices
+- Operations: `dx`, `dy` (first derivatives), `dxx`, `dyy`, `dxy` (second derivatives), `laplacian`
+- Output naming: `matrix_<m>x<n>_<boundary>_<operation>_order<order>.npz` (scipy sparse CSR)
 - Matrix size: (m×n) × (m×n) for 2D field of size m×n
 - Supports order 2/4/6/8 and boundary conditions: circular/symmetric/replicate/zero
 - Uses Kronecker structure: `Dx = I_m ⊗ Dx_1d`, `Dy = Dy_1d ⊗ I_n`
-- Example: `python python_scripts/gradient_matrix.py 512 512 result/grad --order 8 --boundary circular`
-- Apply to field: `python python_scripts/gradient_matrix.py 512 512 result/grad --order 8 --apply data/field.raw`
+- Generate single op: `python python_scripts/gradient_matrix.py 512 512 result/matrices --op dy --order 8 --boundary circular`
+- Generate all ops: `python python_scripts/gradient_matrix.py 512 512 result/matrices --op all --order 4`
+- Apply to field: `python python_scripts/gradient_matrix.py 512 512 result/matrices --op laplacian --order 8 --apply data/field.raw`
+- Run tests: `python python_scripts/gradient_matrix.py --test`
 
 **svd_analysis.py** - SVD analysis of gradient matrices for invertibility
 - Analyzes rank and null space via Kronecker product structure (fast)
@@ -86,6 +89,26 @@ python python_scripts/generate_cone_function_field.py
 - 512×512 field with order 8: Dx/Dy rank = 261,120, null dim = 1,024 (99.61% invertible)
 - Combined gradient [Dx; Dy]: rank = 262,140, null dim = 4 (99.998% invertible)
 - Example: `python python_scripts/svd_analysis.py --size 512 --order 8 --boundary circular`
+
+**direct_projection.py** - Projects error field onto feasible region using LP (L1) or QP (L2)
+- Solves: minimize ||x^ - x*||_p s.t. |x^ - x| ≤ b (space), |Ax^ - Ax| ≤ c (gradient)
+- Norm selection: `--norm L1` (linear programming) or `--norm L2` (quadratic programming, default)
+- L1 uses scipy.linprog (HiGHS), L2 uses OSQP or CVXPY
+- Requires: osqp or cvxpy for L2 (`pip install osqp`)
+- Input: ground truth (x), error field (x*), gradient matrix A, error bounds (REL or ABS)
+- Output (in result/L1/ or result/L2/):
+  - `ground_truth_gradient.f32.raw` - Ax
+  - `error_gradient.f32.raw` - Ax*
+  - `gradient_diff.f32.raw` - Ax* - Ax
+  - `gradient_oob_mask.f32.raw` - Out-of-bound mask (1.0=exceeded)
+  - `projected_space.f32.raw` - x^ (projected)
+  - `projected_gradient.f32.raw` - Ax^
+  - `space_change_mask.f32.raw` - Changed pixels mask
+  - `projected_space_error.f32.raw` - x^ - x (projected error in space)
+  - `projected_gradient_error.f32.raw` - Ax^ - Ax (projected error in gradient)
+  - `projection_stats.txt` - Statistics summary
+- L2 example: `python python_scripts/direct_projection.py data/field.raw data/compressed.raw 512 512 result/matrices/matrix_512x512_circular_dy_order8.npz --space-rel 1e-3 --grad-rel 1e-3`
+- L1 example: `python python_scripts/direct_projection.py data/field.raw data/compressed.raw 512 512 result/matrices/matrix_512x512_circular_dy_order8.npz --space-rel 1e-3 --grad-rel 1e-3 --norm L1`
 
 ## External Dependencies
 

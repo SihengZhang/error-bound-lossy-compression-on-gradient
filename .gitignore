@@ -129,3 +129,27 @@ Thumbs.db
 
 data/
 result/
+
+# ==========================
+# LaTeX
+# ==========================
+# Intermediate compilation files
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.nav
+*.snm
+*.vrb
+*.bcf
+*.run.xml
+*.idx
+*.ind
+*.ilg
