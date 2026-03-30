@@ -110,6 +110,48 @@ python python_scripts/generate_cone_function_field.py
 - L2 example: `python python_scripts/direct_projection.py data/field.raw data/compressed.raw 512 512 result/matrices/matrix_512x512_circular_dy_order8.npz --space-rel 1e-3 --grad-rel 1e-3`
 - L1 example: `python python_scripts/direct_projection.py data/field.raw data/compressed.raw 512 512 result/matrices/matrix_512x512_circular_dy_order8.npz --space-rel 1e-3 --grad-rel 1e-3 --norm L1`
 
+**multi_operator_projection.py** - Projects error field with multiple operator constraints (Lemma 4.6)
+- Solves: minimize ||e - e*||_p s.t. -b ≤ e ≤ b (space), -c^(k) ≤ A_k e ≤ c^(k) for k=1..m (operators)
+- Supports multiple gradient operators simultaneously (dx, dy, laplacian, etc.)
+- Configuration via JSON file (see `configs/` directory for examples)
+- Norm selection: L1 (linear programming) or L2 (quadratic programming)
+- Requires: osqp or cvxpy for L2 (`pip install osqp`)
+- Config format:
+  ```json
+  {
+    "ground_truth": "data/field.raw",
+    "error_field": "data/compressed.raw",
+    "dimensions": {"m": 512, "n": 512},
+    "space_bounds": {"rel": 1e-3},
+    "operators": [
+      {"name": "dx", "matrix": "result/matrices/matrix_dx.npz", "bounds": {"rel": 1e-3}},
+      {"name": "dy", "matrix": "result/matrices/matrix_dy.npz", "bounds": {"rel": 1e-3}}
+    ],
+    "norm": "L2",
+    "output_dir": "result/L2_dx_dy",
+    "solver": "auto"
+  }
+  ```
+- Output (per-operator + combined):
+  - Space: `ground_truth.f32.raw`, `projected_space.f32.raw`, `space_change_mask.f32.raw`
+  - Per-operator: `ground_truth_<op>.f32.raw`, `projected_<op>.f32.raw`, `<op>_oob_mask.f32.raw`
+  - Stats: `projection_stats.txt` with violation counts and distances
+- Examples:
+  - Two operators: `python python_scripts/multi_operator_projection.py configs/projection_dx_dy.json`
+  - Single operator: `python python_scripts/multi_operator_projection.py configs/projection_dy_only.json`
+  - L1 norm: `python python_scripts/multi_operator_projection.py configs/projection_L1_dx_dy.json`
+
+## Configuration Files
+
+Located in `configs/`. JSON configuration files for multi-operator projection.
+
+**projection_dx_dy.json** - L2 projection with both x and y gradient constraints
+**projection_dy_only.json** - L2 projection with y gradient constraint only
+**projection_laplacian.json** - L2 projection with Laplacian constraint
+**projection_L1_dx_dy.json** - L1 projection with both x and y gradient constraints
+
+See `configs/README.md` for detailed configuration format and examples.
+
 ## External Dependencies
 
 ### SZ3 Lossy Compressor
