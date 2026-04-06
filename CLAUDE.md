@@ -141,6 +141,62 @@ python python_scripts/generate_cone_function_field.py
   - Single operator: `python python_scripts/multi_operator_projection.py configs/projection_dy_only.json`
   - L1 norm: `python python_scripts/multi_operator_projection.py configs/projection_L1_dx_dy.json`
 
+## GPU Solvers
+
+Located in `GPU_solver/`. GPU-accelerated implementations using ADMM algorithm.
+
+**multi_operator_projection_gpu.py** - PyTorch-based GPU solver
+- Algorithm: ADMM (Alternating Direction Method of Multipliers)
+- Supports both L1 and L2 norm minimization
+- Uses Conjugate Gradient for linear system solves
+- Adaptive rho parameter tuning
+- Falls back to CPU if CUDA unavailable
+- Requires: `pip install torch` (with CUDA support)
+- Config format: Same JSON as multi_operator_projection.py, with optional `admm` section:
+  ```json
+  {
+    "admm": {
+      "rho": 1.0,
+      "max_iter": 2000,
+      "tol_abs": 1e-6,
+      "tol_rel": 1e-4,
+      "adaptive_rho": true
+    }
+  }
+  ```
+- Examples:
+  - Auto device: `python GPU_solver/multi_operator_projection_gpu.py configs/projection_dx_dy.json`
+  - Specific GPU: `python GPU_solver/multi_operator_projection_gpu.py configs/projection_dx_dy.json --device cuda:0`
+  - CPU mode: `python GPU_solver/multi_operator_projection_gpu.py configs/projection_dx_dy.json --device cpu`
+
+**cupy_solver.py** - CuPy-based GPU solver (faster sparse operations)
+- Algorithm: ADMM with CuPy sparse matrix operations
+- Better performance for large sparse constraint matrices
+- Requires: `pip install cupy-cuda11x` (or `cupy-cuda12x` for CUDA 12)
+- Examples:
+  - Default GPU: `python GPU_solver/cupy_solver.py configs/projection_dx_dy.json`
+  - Specific GPU: `python GPU_solver/cupy_solver.py configs/projection_dx_dy.json --gpu 1`
+
+**chambolle_pock_solver.py** - Chambolle-Pock (PDHG) solver for L1 optimization
+- Algorithm: Primal-Dual Hybrid Gradient (state-of-the-art for L1 + linear constraints)
+- Specifically designed for L1 norm minimization
+- Automatic step size selection based on operator norm estimation
+- More stable convergence for L1 than ADMM
+- Config format: Same JSON with optional `chambolle_pock` section:
+  ```json
+  {
+    "chambolle_pock": {
+      "max_iter": 5000,
+      "tol": 1e-6,
+      "theta": 1.0,
+      "print_interval": 50
+    }
+  }
+  ```
+- Examples:
+  - Run L1 projection: `python GPU_solver/chambolle_pock_solver.py result/configs/projection_dy_only.json`
+  - Specific GPU: `python GPU_solver/chambolle_pock_solver.py config.json --device cuda:1`
+
 ## Configuration Files
 
 Located in `configs/`. JSON configuration files for multi-operator projection.

@@ -1,0 +1,103 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{Reformulating $L_1$ Minimization and Applying PDHG}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Original Problem Definition}
+We aim to solve the following $L_1$ norm minimization problem subject to absolute value linear constraints:
+\begin{equation}
+    \min_{x} \|x\|_1 \quad \text{subject to} \quad |Ax| \le b
+\end{equation}
+where $x \in \mathbb{R}^n$, $A \in \mathbb{R}^{m \times n}$, and $b \in \mathbb{R}^m$.
+
+\section{Conversion to Standard Linear Program}
+To solve this using standard solvers like cuPDLP, we must reformulate the problem into the standard Linear Program (LP) form:
+\begin{equation}
+    \min_{\tilde{x}} c^T \tilde{x} \quad \text{subject to} \quad \tilde{A}\tilde{x} = \tilde{b}, \quad \tilde{x} \ge 0
+\end{equation}
+
+\subsection{Variable Splitting ($L_1$ Objective)}
+Since $x$ can be negative, we split it into its positive and negative parts:
+\begin{equation}
+    x = x^+ - x^-, \quad x^+ \ge 0, \quad x^- \ge 0
+\end{equation}
+Because the optimization minimizes the sum, $x^+$ and $x^-$ will never simultaneously be non-zero for the same index. Thus, the $L_1$ norm becomes a simple linear sum:
+\begin{equation}
+    \|x\|_1 = \sum_{i=1}^n (x_i^+ + x_i^-)
+\end{equation}
+
+\subsection{Splitting Absolute Value Constraints}
+The absolute value constraint $|Ax| \le b$ is equivalent to two separate linear inequalities:
+\begin{align}
+    Ax &\le b \\
+    -Ax &\le b
+\end{align}
+Substituting $x = x^+ - x^-$ yields:
+\begin{align}
+    A(x^+ - x^-) &\le b \\
+    -A(x^+ - x^-) &\le b
+\end{align}
+
+\subsection{Introducing Slack Variables}
+To convert the inequalities into exact equalities, we introduce non-negative slack variables $s_1 \in \mathbb{R}^m$ and $s_2 \in \mathbb{R}^m$:
+\begin{align}
+    A(x^+ - x^-) + s_1 &= b, \quad s_1 \ge 0 \\
+    -A(x^+ - x^-) + s_2 &= b, \quad s_2 \ge 0
+\end{align}
+
+\subsection{Final Block Matrix Formulation}
+We now stack our variables into a single vector $\tilde{x} \ge 0$ and assemble the corresponding cost vector $c$, constraint matrix $\tilde{A}$, and right-hand side vector $\tilde{b}$:
+
+\begin{equation}
+    \tilde{x} = \begin{bmatrix} x^+ \\ x^- \\ s_1 \\ s_2 \end{bmatrix}, \quad
+    c = \begin{bmatrix} \mathbf{1}_n \\ \mathbf{1}_n \\ \mathbf{0}_m \\ \mathbf{0}_m \end{bmatrix}
+\end{equation}
+
+\begin{equation}
+    \tilde{A} = \begin{bmatrix} A & -A & I_m & 0 \\ -A & A & 0 & I_m \end{bmatrix}, \quad
+    \tilde{b} = \begin{bmatrix} b \\ b \end{bmatrix}
+\end{equation}
+where $\mathbf{1}_n$ is a vector of ones of size $n$, $\mathbf{0}_m$ is a vector of zeros of size $m$, and $I_m$ is the $m \times m$ identity matrix.
+
+\section{Optimization via Primal-Dual Hybrid Gradient (PDHG)}
+With the problem in standard LP form, we apply the Chambolle-Pock PDHG algorithm.
+
+\subsection{The Lagrangian}
+We define the Lagrangian for the equality-constrained LP. Let $y \in \mathbb{R}^{2m}$ be the dual variables (Lagrange multipliers):
+\begin{equation}
+    L(\tilde{x}, y) = c^T \tilde{x} - y^T(\tilde{A}\tilde{x} - \tilde{b})
+\end{equation}
+The algorithm seeks a saddle point by taking gradient descent steps in the primal space ($\tilde{x}$) and gradient ascent steps in the dual space ($y$).
+
+\subsection{PDHG Iterations}
+For each iteration $k \ge 0$, given primal step size $\tau > 0$ and dual step size $\sigma > 0$, the updates are:
+
+\textbf{1. Primal Update (Gradient Descent \& Projection):}
+\begin{equation}
+    \tilde{x}_{k+1} = \max\left(0, \tilde{x}_k - \tau (c - \tilde{A}^T y_k)\right)
+\end{equation}
+Note: The $\max(0, \cdot)$ operator projects the solution back into the feasible non-negative space $\tilde{x} \ge 0$.
+
+\textbf{2. Extrapolation (Momentum):}
+\begin{equation}
+    \bar{x}_{k+1} = 2\tilde{x}_{k+1} - \tilde{x}_k
+\end{equation}
+This over-relaxation step ensures convergence of the algorithm for bilinear saddle-point problems.
+
+\textbf{3. Dual Update (Gradient Ascent):}
+\begin{equation}
+    y_{k+1} = y_k + \sigma (\tilde{A}\bar{x}_{k+1} - \tilde{b})
+\end{equation}
+
+Because these updates rely entirely on massive matrix-vector multiplications ($\tilde{A}^T y_k$ and $\tilde{A}\bar{x}_{k+1}$) rather than matrix factorizations, they map perfectly to GPU hardware via frameworks like cuPDLP.
+
+\end{document}
