@@ -1,0 +1,64 @@
+{
+    "ground_truth": "data/Nyx/Nyx_low_res_bd_slice_z_255.f32.raw",
+    "error_field": "data/Nyx/Nyx_low_res_bd_slice_z_255.f32.rel_1e-4.raw",
+    "dimensions": {"m": 512, "n": 512},
+
+    "space_bounds": {
+        "rel": 1e-4
+    },
+
+    "operators": [
+        {
+            "name": "dy",
+            "matrix": "result/matrices/matrix_512x512_circular_dy_order8.npz",
+            "bounds": {"rel": 1e-4}
+        },
+        {
+            "name": "dx",
+            "matrix": "result/matrices/matrix_512x512_circular_dx_order8.npz",
+            "bounds": {"rel": 1e-4}
+        }
+    ],
+
+    "norm": "L1",
+    "output_dir": "result/PDHG_L1_dy_dx_order8",
+    "verbose": true,
+
+    "pdhg": {
+        "_comment_step_sizes": "Fixed conservative step sizes for stability",
+        "tau": null,
+        "sigma": null,
+        "theta": 1.0,
+
+        "_comment_convergence": "Convergence criteria",
+        "max_iter": 100000,
+        "tol": 1e-6,
+        "primal_tol": null,
+        "dual_tol": null,
+        "bound_tol": 1e-5,
+
+        "_comment_adaptive": "Disable adaptive to prevent oscillation",
+        "adaptive": false,
+        "adaptive_gamma": 0.7,
+        "adaptive_delta": 1.5,
+        "adaptive_eta": 0.95,
+
+        "_comment_fine_tune": "Disable fine-tuning - use fixed steps",
+        "fine_tune": false,
+        "fine_tune_threshold": 1e-3,
+        "fine_tune_factor": 0.7,
+        "min_step": 1e-4,
+
+        "_comment_acceleration": "Restart helps break stagnation",
+        "backtrack": false,
+        "restart": true,
+        "restart_interval": 50,
+
+        "_comment_post_process": "Disabled - rely on PDHG convergence only",
+        "post_project": false,
+        "post_project_iter": 1000,
+
+        "_comment_output": "Output control",
+        "print_interval": 500
+    }
+}

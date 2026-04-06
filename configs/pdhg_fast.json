@@ -1,0 +1,40 @@
+{
+    "_description": "Fast convergence config - prioritizes speed over precision",
+
+    "ground_truth": "data/512x512/baryon_density.f32.raw",
+    "error_field": "data/512x512/baryon_density_compressed.f32.raw",
+    "dimensions": {"m": 512, "n": 512},
+
+    "space_bounds": {"rel": 1e-3},
+
+    "operators": [
+        {
+            "name": "dy",
+            "matrix": "result/matrices/matrix_512x512_circular_dy_order8.npz",
+            "bounds": {"rel": 1e-3}
+        }
+    ],
+
+    "norm": "L1",
+    "output_dir": "result/PDHG_fast",
+    "verbose": true,
+
+    "pdhg": {
+        "tau": null,
+        "sigma": null,
+        "theta": 1.0,
+
+        "max_iter": 5000,
+        "tol": 1e-4,
+        "bound_tol": 1e-4,
+
+        "adaptive": true,
+        "adaptive_gamma": 0.7,
+        "adaptive_eta": 0.9,
+
+        "restart": true,
+        "restart_interval": 50,
+
+        "print_interval": 25
+    }
+}

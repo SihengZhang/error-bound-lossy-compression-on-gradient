@@ -1,0 +1,39 @@
+{
+    "ground_truth": "data/512x512/baryon_density.f32.raw",
+    "error_field": "data/512x512/baryon_density_compressed.f32.raw",
+    "dimensions": {"m": 512, "n": 512},
+
+    "space_bounds": {
+        "rel": 1e-3
+    },
+
+    "operators": [
+        {
+            "name": "dx",
+            "matrix": "result/matrices/matrix_512x512_circular_dx_order8.npz",
+            "bounds": {"rel": 1e-3}
+        },
+        {
+            "name": "dy",
+            "matrix": "result/matrices/matrix_512x512_circular_dy_order8.npz",
+            "bounds": {"rel": 1e-3}
+        }
+    ],
+
+    "norm": "L1",
+    "output_dir": "result/PDHG_L1_dx_dy",
+    "verbose": true,
+
+    "pdhg": {
+        "tau": null,
+        "sigma": null,
+        "theta": 1.0,
+        "max_iter": 10000,
+        "tol": 1e-6,
+        "bound_tol": 1e-6,
+        "adaptive": true,
+        "restart": true,
+        "restart_interval": 100,
+        "print_interval": 100
+    }
+}

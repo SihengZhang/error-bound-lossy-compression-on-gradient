@@ -177,7 +177,7 @@ Located in `GPU_solver/`. GPU-accelerated implementations using ADMM algorithm.
   - Default GPU: `python GPU_solver/cupy_solver.py configs/projection_dx_dy.json`
   - Specific GPU: `python GPU_solver/cupy_solver.py configs/projection_dx_dy.json --gpu 1`
 
-**chambolle_pock_solver.py** - Chambolle-Pock (PDHG) solver for L1 optimization
+**chambolle_pock_solver.py** - Chambolle-Pock (PDHG) solver for L1 optimization (PyTorch)
 - Algorithm: Primal-Dual Hybrid Gradient (state-of-the-art for L1 + linear constraints)
 - Specifically designed for L1 norm minimization
 - Automatic step size selection based on operator norm estimation
@@ -196,6 +196,61 @@ Located in `GPU_solver/`. GPU-accelerated implementations using ADMM algorithm.
 - Examples:
   - Run L1 projection: `python GPU_solver/chambolle_pock_solver.py result/configs/projection_dy_only.json`
   - Specific GPU: `python GPU_solver/chambolle_pock_solver.py config.json --device cuda:1`
+
+**cupy_pdhg_solver.py** - CuPy-based PDHG solver (recommended for L1)
+- Algorithm: PDHG (Chambolle-Pock) as described in `LaTeX/feasible_region_lemmas.tex`
+- Uses CuPy for faster sparse matrix operations than PyTorch
+- Features: adaptive step sizes, adaptive restart, fine-tuning, post-processing projection
+- Requires: `pip install cupy-cuda11x` (or `cupy-cuda12x` for CUDA 12)
+- Config format: Same JSON with optional `pdhg` section:
+  ```json
+  {
+    "pdhg": {
+      "tau": null,
+      "sigma": null,
+      "theta": 1.0,
+      "max_iter": 20000,
+      "tol": 1e-6,
+      "primal_tol": null,
+      "dual_tol": null,
+      "bound_tol": 1e-5,
+      "adaptive": true,
+      "adaptive_gamma": 0.7,
+      "adaptive_eta": 0.95,
+      "fine_tune": true,
+      "fine_tune_threshold": 1e-3,
+      "fine_tune_factor": 0.7,
+      "min_step": 1e-4,
+      "restart": true,
+      "restart_interval": 100,
+      "post_project": true,
+      "post_project_iter": 1000,
+      "print_interval": 100
+    }
+  }
+  ```
+- Step size parameters:
+  - `tau`: Primal step size (auto if null, requires tau*sigma*||K||^2 < 1)
+  - `sigma`: Dual step size (auto if null)
+  - `theta`: Extrapolation parameter [0,1], default 1.0
+- Adaptive parameters:
+  - `adaptive`: Enable adaptive step size balancing (recommended: true)
+  - `adaptive_gamma`: Backtracking factor (recommended: 0.7)
+  - `adaptive_eta`: Target primal/dual ratio
+- Fine-tuning parameters (for tight convergence):
+  - `fine_tune`: Enable automatic step reduction near solution
+  - `fine_tune_factor`: Step reduction factor (recommended: 0.7, not too aggressive)
+  - `min_step`: Minimum step size (recommended: 1e-4, prevents steps from getting too small)
+- Post-processing (ensures feasibility):
+  - `post_project`: Enable post-processing projection to eliminate remaining violations
+  - `post_project_iter`: Max iterations for Dykstra-like projection
+- Acceleration:
+  - `restart`: Enable adaptive restart for faster convergence
+  - `restart_interval`: Check restart condition every N iterations
+- Examples:
+  - Default: `python GPU_solver/cupy_pdhg_solver.py configs/pdhg_example.json`
+  - Specific GPU: `python GPU_solver/cupy_pdhg_solver.py configs/pdhg_dx_dy.json --gpu 1`
+  - Override step sizes: `python GPU_solver/cupy_pdhg_solver.py config.json --tau 0.01 --sigma 0.01`
 
 ## Configuration Files
 
