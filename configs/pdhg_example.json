@@ -10,18 +10,13 @@
     "operators": [
         {
             "name": "dy",
-            "matrix": "result/matrices/matrix_512x512_circular_dy_order8.npz",
-            "bounds": {"rel": 1e-4}
-        },
-        {
-            "name": "dx",
-            "matrix": "result/matrices/matrix_512x512_circular_dx_order8.npz",
+            "matrix": "result/matrices/matrix_512x512_circular_dy_order2.npz",
             "bounds": {"rel": 1e-4}
         }
     ],
 
     "norm": "L1",
-    "output_dir": "result/PDHG_L1_dy_dx_order8",
+    "output_dir": "result/PDHG_L1_dy_order2_1e-4",
     "verbose": true,
 
     "pdhg": {

@@ -45,9 +45,36 @@ import argparse
 import numpy as np
 from scipy.sparse import load_npz, csr_matrix
 import os
+import sys
 import json
 import time
+from datetime import datetime
+from io import StringIO
 from typing import Dict, List, Tuple, Optional
+
+
+class TeeOutput:
+    """Capture stdout while still printing to console."""
+    def __init__(self):
+        self.buffer = StringIO()
+        self.stdout = sys.stdout
+
+    def write(self, text):
+        self.buffer.write(text)
+        self.stdout.write(text)
+
+    def flush(self):
+        self.stdout.flush()
+
+    def getvalue(self):
+        return self.buffer.getvalue()
+
+    def __enter__(self):
+        sys.stdout = self
+        return self
+
+    def __exit__(self, *args):
+        sys.stdout = self.stdout
 
 # Try to import CuPy
 try:
@@ -602,93 +629,6 @@ class CuPyPDHGSolver:
         # Return ε̂ = δ + ε₀
         return self.delta + self.e0
 
-    def project_to_feasible(self, e_hat: cp.ndarray, max_iter: int = 1000) -> cp.ndarray:
-        """
-        Project solution onto feasible region using iterative Dykstra-like projection.
-
-        This is a post-processing step to eliminate any remaining constraint violations
-        after PDHG has converged to an approximate solution.
-
-        Args:
-            e_hat: Approximate solution from PDHG
-            max_iter: Maximum projection iterations
-
-        Returns:
-            Feasible e_hat with all constraints satisfied
-        """
-        if self.verbose:
-            print(f"\n  === Post-processing: Projecting to feasible region ===")
-
-        e = e_hat.copy()
-
-        for iteration in range(max_iter):
-            e_old = e.copy()
-
-            # Project onto space constraints: |e| ≤ d
-            e = cp.clip(e, -self.space_d, self.space_d)
-
-            # Project onto each operator constraint: |A_k e| ≤ b_k
-            # Using averaged projections (Dykstra's algorithm style)
-            for i, op in enumerate(self.operators):
-                Ae = op['matrix'] @ e
-                bounds = op['bounds']
-
-                # Find violations
-                excess_pos = cp.maximum(Ae - bounds, 0)
-                excess_neg = cp.maximum(-Ae - bounds, 0)
-                excess = excess_pos - excess_neg
-
-                if cp.any(cp.abs(excess) > self.bound_tol):
-                    # Correct violations using pseudo-inverse projection
-                    # For sparse gradient operators, A^T A is well-conditioned
-                    # Use gradient descent: e -= alpha * A^T * excess
-                    AtA_diag = cp.array(op['matrix'].multiply(op['matrix']).sum(axis=0)).flatten()
-                    alpha = 0.5 / (cp.max(AtA_diag) + 1e-10)  # Conservative step
-                    correction = op['matrix'].T @ excess
-                    e = e - float(alpha) * correction
-
-                    # Re-project onto space constraints
-                    e = cp.clip(e, -self.space_d, self.space_d)
-
-            # Check convergence
-            change = float(cp.linalg.norm(e - e_old))
-            if change < 1e-10:
-                break
-
-        # Final hard clip on all constraints
-        e = cp.clip(e, -self.space_d, self.space_d)
-
-        if self.verbose:
-            _, max_viol, space_viol, grad_viol = self._compute_constraint_violation_for(e)
-            print(f"  After projection: space_viol={space_viol}, grad_viol={grad_viol}, max_viol={max_viol:.2e}")
-
-        return e
-
-    def _compute_constraint_violation_for(self, e_hat: cp.ndarray) -> Tuple[float, float, int, int]:
-        """Compute constraint violations for a given e_hat (not self.delta)."""
-        # Space violations: |e_hat| > d
-        space_excess = cp.maximum(cp.abs(e_hat) - self.space_d, 0)
-        space_viol = int(cp.sum(space_excess > self.bound_tol))
-
-        # Gradient violations
-        grad_viol = 0
-        max_viol = float(cp.max(space_excess))
-
-        # For this check, e_hat IS the error (not delta), so we compute A @ e_hat directly
-        # But our operators store offsets for delta formulation
-        # e_hat = delta + e0, so A @ e_hat = A @ delta + A @ e0
-        delta = e_hat - self.e0
-
-        for i, op in enumerate(self.operators):
-            Ae = op['matrix'] @ delta + self.operator_offsets[i]
-            excess = cp.maximum(cp.abs(Ae) - op['bounds'], 0)
-            grad_viol += int(cp.sum(excess > self.bound_tol))
-            max_viol = max(max_viol, float(cp.max(excess)))
-
-        total_viol = float(cp.sum(space_excess))
-
-        return total_viol, max_viol, space_viol, grad_viol
-
 
 def compute_error_bounds(reference_data: np.ndarray,
                          rel: float = None,
@@ -740,8 +680,6 @@ def load_config(config_path: str) -> Dict:
     pdhg.setdefault('restart', True)
     pdhg.setdefault('restart_interval', 100)
     pdhg.setdefault('print_interval', 50)
-    pdhg.setdefault('post_project', True)  # Enable post-processing projection
-    pdhg.setdefault('post_project_iter', 1000)
 
     return config
 
@@ -776,9 +714,14 @@ def main():
     # Set GPU device
     cp.cuda.Device(args.gpu).use()
 
+    # Start capturing output
+    tee = TeeOutput()
+    tee.__enter__()
+
     print("=" * 80)
     print("CuPy PDHG (Chambolle-Pock) L1 Projection Solver")
     print("=" * 80)
+    print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"\nGPU {args.gpu}: {cp.cuda.runtime.getDeviceProperties(args.gpu)['name'].decode()}")
     mem_info = cp.cuda.runtime.memGetInfo()
     print(f"Memory: {mem_info[1] / 1e9:.1f} GB total, {mem_info[0] / 1e9:.1f} GB free")
@@ -863,7 +806,13 @@ def main():
 
     # Analyze violations
     print(f"\n[5/7] Analyzing violations...")
-    space_violations_before = np.sum(np.abs(e_star) > b)
+
+    # Compute unique pixel violations (union across all constraints)
+    # A pixel is violated if it violates space OR any gradient constraint
+    space_viol_mask_before = np.abs(e_star) > b
+    space_violations_before = np.sum(space_viol_mask_before)
+    unique_viol_mask_before = space_viol_mask_before.copy()
+
     print(f"\n  === Before Projection ===")
     print(f"  Space violations: {space_violations_before:,} ({100*space_violations_before/len(e_star):.4f}%)")
     print(f"  Max space error: {np.abs(e_star).max():.6e} (bound: {b[0]:.6e})")
@@ -871,9 +820,17 @@ def main():
     total_grad_violations = 0
     for op in operators_np:
         Ae = op['error_field'] - op['ground_truth']
-        viol = np.sum(np.abs(Ae) > op['bounds'])
+        op_viol_mask = np.abs(Ae) > op['bounds']
+        viol = np.sum(op_viol_mask)
         total_grad_violations += viol
+        # Union with unique mask (gradient violations are per-element in gradient space,
+        # need to map back to pixel space - for gradient operators this is 1:1)
+        unique_viol_mask_before = unique_viol_mask_before | op_viol_mask
         print(f"  [{op['name']}] violations: {viol:,}, max error: {np.abs(Ae).max():.6e} (bound: {op['bounds'][0]:.6e})")
+
+    unique_pixels_violated_before = np.sum(unique_viol_mask_before)
+    print(f"  ---")
+    print(f"  Total unique pixels violated: {unique_pixels_violated_before:,} ({100*unique_pixels_violated_before/len(e_star):.4f}%)")
 
     if space_violations_before == 0 and total_grad_violations == 0:
         print("\n  Already feasible!")
@@ -918,17 +875,6 @@ def main():
         e_proj_gpu = solver.solve()
         print(f"  Completed in {time.time()-solve_start:.2f}s")
 
-        # Post-processing projection to eliminate remaining violations
-        if pdhg_config.get('post_project', True):
-            _, max_viol, space_viol, grad_viol = solver._compute_constraint_violation()
-            if space_viol > 0 or grad_viol > 0:
-                print(f"\n  Remaining violations: space={space_viol}, grad={grad_viol}")
-                print(f"  Running post-processing projection...")
-                e_proj_gpu = solver.project_to_feasible(
-                    e_proj_gpu,
-                    max_iter=pdhg_config.get('post_project_iter', 1000)
-                )
-
         e_proj = cp.asnumpy(e_proj_gpu)
 
     # Results
@@ -946,19 +892,31 @@ def main():
     l1_dist = np.sum(np.abs(x_proj - x_star))
     l2_dist = np.linalg.norm(x_proj - x_star)
 
+    # Compute unique pixel violations after projection
+    space_viol_mask_after = space_excess > bound_tol
+    unique_viol_mask_after = space_viol_mask_after.copy()
+
     print(f"\n  === After Projection (using bound_tol={bound_tol:.0e}) ===")
     print(f"  Space violations: {space_violations_after}")
     print(f"  Max space error: {np.abs(e_proj).max():.6e} (bound: {b[0]:.6e}, excess: {space_max_excess:.6e})")
 
+    total_grad_violations_after = 0
     for i, op in enumerate(operators_np):
         Ax_proj = op['matrix'] @ x_proj
         Ae_proj = Ax_proj - op['ground_truth']
         grad_excess = np.maximum(np.abs(Ae_proj) - op['bounds'], 0)
-        viol = np.sum(grad_excess > bound_tol)
+        op_viol_mask = grad_excess > bound_tol
+        viol = np.sum(op_viol_mask)
+        total_grad_violations_after += viol
         max_excess = grad_excess.max()
         op['projected_field'] = Ax_proj
         op['projected_error'] = Ae_proj
+        unique_viol_mask_after = unique_viol_mask_after | op_viol_mask
         print(f"  [{op['name']}] violations: {viol}, max error: {np.abs(Ae_proj).max():.6e} (bound: {op['bounds'][0]:.6e}, excess: {max_excess:.6e})")
+
+    unique_pixels_violated_after = np.sum(unique_viol_mask_after)
+    print(f"  ---")
+    print(f"  Total unique pixels violated: {unique_pixels_violated_after:,} ({100*unique_pixels_violated_after/len(e_proj):.4f}%)")
 
     print(f"\n  Summary:")
     print(f"    Pixels changed: {pixels_changed:,} ({100*pixels_changed/len(x_star):.4f}%)")
@@ -989,31 +947,47 @@ def main():
         grad_oob = (np.abs(grad_diff) > op['bounds']).astype(np.float32)
         write_raw_float32(os.path.join(config['output_dir'], f"{name}_oob_mask.f32.raw"), grad_oob)
 
-    # Stats file
-    stats_path = os.path.join(config['output_dir'], "projection_stats.txt")
-    with open(stats_path, 'w') as f:
-        f.write(f"=== PDHG L1 Projection (CuPy) ===\n\n")
-        f.write(f"Configuration:\n")
-        f.write(f"  GPU: {args.gpu}\n")
-        f.write(f"  Dimensions: {m} x {n}\n")
-        f.write(f"\nPDHG Parameters:\n")
-        f.write(f"  tau (initial): {pdhg_config['tau']}\n")
-        f.write(f"  sigma (initial): {pdhg_config['sigma']}\n")
-        f.write(f"  theta: {pdhg_config['theta']}\n")
-        f.write(f"  max_iter: {pdhg_config['max_iter']}\n")
-        f.write(f"  tol: {pdhg_config['tol']}\n")
-        f.write(f"  bound_tol: {pdhg_config['bound_tol']}\n")
-        f.write(f"  adaptive: {pdhg_config['adaptive']}\n")
-        f.write(f"  restart: {pdhg_config['restart']}\n")
-        f.write(f"\nResults:\n")
-        f.write(f"  Space violations after: {space_violations_after}\n")
-        f.write(f"  Pixels changed: {pixels_changed}\n")
-        f.write(f"  L1 distance: {l1_dist:.6e}\n")
-        f.write(f"  L2 distance: {l2_dist:.6e}\n")
-
     print("\n" + "=" * 80)
     print("Projection complete!")
     print("=" * 80)
+
+    # Stop capturing output
+    tee.__exit__(None, None, None)
+    cli_output = tee.getvalue()
+
+    # Write stats file with full config and CLI output
+    stats_path = os.path.join(config['output_dir'], "projection_stats.txt")
+    with open(stats_path, 'w') as f:
+        # Write full configuration as JSON
+        f.write("=" * 80 + "\n")
+        f.write("CONFIGURATION\n")
+        f.write("=" * 80 + "\n\n")
+        f.write(json.dumps(config, indent=2))
+        f.write("\n\n")
+
+        # Write summary statistics
+        f.write("=" * 80 + "\n")
+        f.write("SUMMARY\n")
+        f.write("=" * 80 + "\n\n")
+        f.write(f"Before Projection:\n")
+        f.write(f"  Space violations: {space_violations_before:,}\n")
+        f.write(f"  Total gradient violations: {total_grad_violations:,}\n")
+        f.write(f"  Unique pixels violated: {unique_pixels_violated_before:,} ({100*unique_pixels_violated_before/len(e_star):.4f}%)\n")
+        f.write(f"\nAfter Projection:\n")
+        f.write(f"  Space violations: {space_violations_after:,}\n")
+        f.write(f"  Total gradient violations: {total_grad_violations_after:,}\n")
+        f.write(f"  Unique pixels violated: {unique_pixels_violated_after:,} ({100*unique_pixels_violated_after/len(e_proj):.4f}%)\n")
+        f.write(f"\nProjection Statistics:\n")
+        f.write(f"  Pixels changed: {pixels_changed:,} ({100*pixels_changed/len(x_star):.4f}%)\n")
+        f.write(f"  L1 distance: {l1_dist:.6e}\n")
+        f.write(f"  L2 distance: {l2_dist:.6e}\n")
+        f.write("\n\n")
+
+        # Write full CLI output
+        f.write("=" * 80 + "\n")
+        f.write("FULL CLI OUTPUT\n")
+        f.write("=" * 80 + "\n\n")
+        f.write(cli_output)
 
 
 if __name__ == '__main__':
