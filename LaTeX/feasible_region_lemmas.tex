@@ -5,224 +5,123 @@
 \usepackage{amsmath,amssymb,amsthm}
 
 \newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
 
 \begin{document}
 
-\begin{lemma}[Linear Operators on Discrete Fields]
+\begin{definition}[Linear Operators on Discrete Fields]
 \label{lem:linear-operator}
-Let $\mathbf{x} \in \mathbb{R}^N$ be a discrete scalar field defined on a $d$-dimensional regular grid with dimensions $n_1 \times n_2 \times \cdots \times n_d$, where $N = \prod_{j=1}^d n_j$. The field values are stored in a flattened vector using row-major ordering.
+Let $\mathbf{x} \in \mathbb{R}^n$ be a data array defined on a $d$-dimensional regular grid with dimensions $n_1 \times n_2 \times \cdots \times n_d$, where $n = \prod_{j=1}^d n_j$. The data values are stored in a flattened vector using row-major ordering.
 
-Any linear operation on $\mathbf{x}$ that produces an output $\mathbf{y} \in \mathbb{R}^N$ of the same dimension can be represented as
+Any linear operation on $\mathbf{x}$ that produces an output $\mathbf{y} \in \mathbb{R}^n$ of the same dimension can be represented as
 \begin{equation}
     \mathbf{y} = \mathbf{A}\mathbf{x}
 \end{equation}
-for some matrix $\mathbf{A} \in \mathbb{R}^{N \times N}$. The choice of boundary condition (circular, symmetric, replicate, or zero) affects the values of the matrix entries but does not alter the linearity of the operation.
-\end{lemma}
+for some matrix $\mathbf{A} \in \mathbb{R}^{n \times n}$. The choice of boundary condition (circular, symmetric, replicate, or zero) affects the values of the matrix entries but does not alter the linearity of the operation.
+\end{definition}
 
-\begin{proof}
-Any linear operation can be represented as matrix multiplication $\mathbf{y} = \mathbf{A}\mathbf{x}$, where the $i$-th row of $\mathbf{A}$ contains the coefficients that determine $y_i$ as a linear combination of the elements of $\mathbf{x}$:
+\begin{definition}[Multi-Operator Constraints]
+\label{def:multi-operator-constraints}
+Given $m$ linear operators $\mathbf{A}_1, \ldots, \mathbf{A}_m \in \mathbb{R}^{n \times n}$ with corresponding per-element bound vectors $\mathbf{b}_1, \ldots, \mathbf{b}_m \in \mathbb{R}^n_{>0}$, and a box constraint bound $\mathbf{d} \in \mathbb{R}^n_{>0}$, the feasible region is:
 \begin{equation}
-    y_i = \sum_{j=1}^N A_{ij} x_j.
+    \mathcal{S} = \left\{ \mathbf{x} \in \mathbb{R}^n \;\middle|\; |\mathbf{x}| \le \mathbf{d} \text{ and } |\mathbf{A}_k \mathbf{x}| \le \mathbf{b}_k \text{ for all } k \in \{1, \ldots, m\} \right\}
 \end{equation}
-
-When boundary conditions are applied (e.g., in stencil operations on finite grids), they determine how out-of-bounds indices map to valid entries, thereby fixing specific numerical values in the matrix $\mathbf{A}$. Once these entries are determined, the resulting operation $\mathbf{y} = \mathbf{A}\mathbf{x}$ remains a linear transformation regardless of which boundary condition was used.
-\end{proof}
-
-\begin{lemma}[Gradient Operators via Finite-Difference Stencils]
-\label{lem:gradient-operator}
-Gradient operators are linear operators (as defined in Lemma~\ref{lem:linear-operator}) constructed using finite-difference stencils to approximate partial derivatives. We assume unit grid spacing throughout.
-
-\textbf{1D Finite-Difference Operator:} Let $\mathbf{x} \in \mathbb{R}^n$ be a discrete field on a 1D grid of size $n$ with unit spacing. A finite-difference operator $\mathbf{D}_{\text{1d}} \in \mathbb{R}^{n \times n}$ approximating the first derivative is defined by
-\begin{equation}
-    (\mathbf{D}_{\text{1d}} \mathbf{x})_i = \sum_{k=-p}^{p} c_k \, x_{i+k}, \quad i = 1, \ldots, n,
-\end{equation}
-where $\{c_k\}_{k=-p}^{p}$ are the stencil coefficients for a centered finite-difference scheme of order $2p$. To approximate the first derivative with unit grid spacing, the coefficients must satisfy
-\begin{equation}
-    \sum_{k=-p}^{p} c_k = 0 \quad \text{and} \quad \sum_{k=-p}^{p} k \, c_k = 1.
-\end{equation}
-These conditions arise from Taylor series expansion: for a smooth function $f$, we have $f(x_i + k) = f(x_i) + k f'(x_i) + O(k^2)$. Applying the stencil yields
-\begin{equation}
-    \sum_{k=-p}^{p} c_k f(x_i + k) = f(x_i) \sum_{k} c_k + f'(x_i) \sum_{k} k c_k + O(\text{higher order}),
-\end{equation}
-which equals $f'(x_i)$ when the two conditions hold. Standard coefficient choices include:
-\begin{itemize}
-    \item \textit{Order 2:} $c_{-1} = -\frac{1}{2}$, $c_0 = 0$, $c_1 = \frac{1}{2}$
-    \item \textit{Order 4:} $c_{-2} = \frac{1}{12}$, $c_{-1} = -\frac{2}{3}$, $c_0 = 0$, $c_1 = \frac{2}{3}$, $c_2 = -\frac{1}{12}$
-\end{itemize}
-Boundary conditions (circular, symmetric, replicate, or zero) specify how indices $i+k$ outside $\{1, \ldots, n\}$ are handled.
-
-\textbf{Multi-dimensional Gradient Operators:} Let $\mathbf{x} \in \mathbb{R}^N$ be a discrete field on a $d$-dimensional grid with dimensions $n_1 \times \cdots \times n_d$, where $N = \prod_{j=1}^d n_j$, stored in row-major order. For each dimension $j \in \{1, \ldots, d\}$, the partial derivative operator along dimension $j$ is constructed via the Kronecker product:
-\begin{equation}
-    \mathbf{D}_j = \mathbf{I}_{n_1} \otimes \cdots \otimes \mathbf{I}_{n_{j-1}} \otimes \mathbf{D}_{\text{1d}}^{(j)} \otimes \mathbf{I}_{n_{j+1}} \otimes \cdots \otimes \mathbf{I}_{n_d} \in \mathbb{R}^{N \times N},
-\end{equation}
-where $\mathbf{I}_{n_k} \in \mathbb{R}^{n_k \times n_k}$ is the identity matrix and $\mathbf{D}_{\text{1d}}^{(j)} \in \mathbb{R}^{n_j \times n_j}$ is the 1D finite-difference operator along dimension $j$.
-
-\textbf{2D Example:} For a 2D field on an $m \times n$ grid (where $n_1 = m$, $n_2 = n$, and $N = mn$), the partial derivative operators are
-\begin{equation}
-    \mathbf{D}_x = \mathbf{I}_m \otimes \mathbf{D}_{\text{1d}}^{(x)} \in \mathbb{R}^{mn \times mn}, \quad \mathbf{D}_y = \mathbf{D}_{\text{1d}}^{(y)} \otimes \mathbf{I}_n \in \mathbb{R}^{mn \times mn},
-\end{equation}
-where $\mathbf{D}_{\text{1d}}^{(x)} \in \mathbb{R}^{n \times n}$ differentiates along columns (x-direction) and $\mathbf{D}_{\text{1d}}^{(y)} \in \mathbb{R}^{m \times m}$ differentiates along rows (y-direction).
-\end{lemma}
-
-\begin{proof}
-The Kronecker product construction is justified by the mode product formulation of differential operators on separable grids. Consider a $d$-dimensional discrete field as a tensor $\mathcal{X} \in \mathbb{R}^{n_1 \times \cdots \times n_d}$.
-
-\textbf{Mode-$j$ Product:} Given a tensor $\mathcal{X} \in \mathbb{R}^{n_1 \times \cdots \times n_d}$ and a matrix $\mathbf{D}_{\text{1d}}^{(j)} \in \mathbb{R}^{n_j \times n_j}$, the mode-$j$ product $\mathcal{X} \times_j \mathbf{D}_{\text{1d}}^{(j)} \in \mathbb{R}^{n_1 \times \cdots \times n_d}$ is defined element-wise as
-\begin{equation}
-    \left(\mathcal{X} \times_j \mathbf{D}_{\text{1d}}^{(j)}\right)_{i_1, \ldots, i_d} = \sum_{\ell=1}^{n_j} \mathcal{X}_{i_1, \ldots, i_{j-1}, \ell, i_{j+1}, \ldots, i_d} \, D_{\text{1d}, i_j \ell}^{(j)}.
-\end{equation}
-This operation applies the 1D operator $\mathbf{D}_{\text{1d}}^{(j)}$ to each 1D fiber along dimension $j$ while leaving other dimensions unchanged.
-
-\textbf{Vectorization and Kronecker Product:} In the flattened representation, the field is vectorized using row-major ordering: $\text{vec}: \mathbb{R}^{n_1 \times \cdots \times n_d} \to \mathbb{R}^N$. The fundamental property connecting the mode product to the Kronecker product is
-\begin{equation}
-    \mathbf{D}_j \, \text{vec}(\mathcal{X}) = \text{vec}\left(\mathcal{X} \times_j \mathbf{D}_{\text{1d}}^{(j)}\right),
-\end{equation}
-where $\mathbf{D}_j = \mathbf{I}_{n_1} \otimes \cdots \otimes \mathbf{I}_{n_{j-1}} \otimes \mathbf{D}_{\text{1d}}^{(j)} \otimes \mathbf{I}_{n_{j+1}} \otimes \cdots \otimes \mathbf{I}_{n_d} \in \mathbb{R}^{N \times N}$ is the matrix form of the operator. This equation establishes that:
-\begin{itemize}
-    \item \textit{Left side:} Flatten the tensor to a vector, then apply matrix-vector multiplication with $\mathbf{D}_j$
-    \item \textit{Right side:} Apply the mode-$j$ product to the tensor, then flatten the result
-\end{itemize}
-These two operations are equivalent, ensuring that $\mathbf{D}_j \mathbf{x}$ correctly computes the partial derivative in the flattened representation.
-
-\end{proof}
-
-\begin{lemma}[Feasible Error Region]
-\label{lem:feasible-region}
-Consider a discrete scalar field represented as a flattened vector $\mathbf{x} \in \mathbb{R}^N$, and let $\mathbf{A} \in \mathbb{R}^{N \times N}$ be a linear operator (as defined in Lemma~\ref{lem:linear-operator}). Let $\tilde{\mathbf{x}} = \mathbf{x} + \boldsymbol{\varepsilon}$ denote the reconstructed field after lossy compression, where $\boldsymbol{\varepsilon} = (\varepsilon_1, \ldots, \varepsilon_N)^\top \in \mathbb{R}^N$ is the spatial error vector.
-
-Define the output error vector $\boldsymbol{\delta} = (\delta_1, \ldots, \delta_N)^\top \in \mathbb{R}^N$ as
-\begin{equation}
-    \boldsymbol{\delta} = \mathbf{A}\tilde{\mathbf{x}} - \mathbf{A}\mathbf{x} = \mathbf{A}(\tilde{\mathbf{x}} - \mathbf{x}) = \mathbf{A}\boldsymbol{\varepsilon},
-\end{equation}
-
-Let $\boldsymbol{\Delta} = (\Delta_1, \ldots, \Delta_N)^\top \in \mathbb{R}^N_{>0}$ be a vector of per-element error bounds. If the output error must satisfy the per-element constraint
-\begin{equation}
-    -\Delta_i \leq \delta_i \leq \Delta_i \quad \text{for all } i \in \{1, \ldots, N\},
-\end{equation}
-then the feasible region $\mathcal{S}_{\text{output}}$ of spatial errors $\boldsymbol{\varepsilon} \in \mathbb{R}^N$ is
-\begin{equation}
-    \mathcal{S}_{\text{output}} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i \leq (\mathbf{A}\boldsymbol{\varepsilon})_i \leq \Delta_i \text{ for all } i \in \{1, \ldots, N\} \right\}.
-\end{equation}
-\end{lemma}
+\end{definition}
 
 \begin{lemma}[Convexity of the Feasible Region]
-\label{lem:convexity}
-The feasible error region
-\begin{equation}
-    \mathcal{S}_{\text{output}} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i \leq (\mathbf{A}\boldsymbol{\varepsilon})_i \leq \Delta_i \text{ for all } i \in \{1, \ldots, N\} \right\}
-\end{equation}
-is a convex set.
+\label{lem:feasible-region}
+The feasible region $\mathcal{S}$ defined in Definition~\ref{def:multi-operator-constraints} is convex.
 \end{lemma}
 
 \begin{proof}
-Let $\boldsymbol{\varepsilon}_1, \boldsymbol{\varepsilon}_2 \in \mathcal{S}_{\text{output}}$ be arbitrary points in the feasible region. By definition, they satisfy
-\begin{equation}
-    -\Delta_i \leq (\mathbf{A}\boldsymbol{\varepsilon}_1)_i \leq \Delta_i
-    \quad \text{and} \quad
-    -\Delta_i \leq (\mathbf{A}\boldsymbol{\varepsilon}_2)_i \leq \Delta_i
-\end{equation}
-for all $i \in \{1, \ldots, N\}$.
+Let $\mathbf{x}_1, \mathbf{x}_2 \in \mathcal{S}$ and consider any convex combination $\mathbf{x}_t = t\mathbf{x}_1 + (1-t)\mathbf{x}_2$ for $t \in [0, 1]$.
 
-Consider any convex combination $\boldsymbol{\varepsilon}_t = t\boldsymbol{\varepsilon}_1 + (1-t)\boldsymbol{\varepsilon}_2$ for $t \in [0, 1]$. By the linearity of $\mathbf{A}$,
+\textbf{Box constraint:} Since $|\mathbf{x}_1| \le \mathbf{d}$ and $|\mathbf{x}_2| \le \mathbf{d}$, by the triangle inequality:
 \begin{equation}
-    \mathbf{A}\boldsymbol{\varepsilon}_t = \mathbf{A}\bigl(t\boldsymbol{\varepsilon}_1 + (1-t)\boldsymbol{\varepsilon}_2\bigr) = t\mathbf{A}\boldsymbol{\varepsilon}_1 + (1-t)\mathbf{A}\boldsymbol{\varepsilon}_2.
+    |\mathbf{x}_t| = |t\mathbf{x}_1 + (1-t)\mathbf{x}_2| \le t|\mathbf{x}_1| + (1-t)|\mathbf{x}_2| \le t\mathbf{d} + (1-t)\mathbf{d} = \mathbf{d}.
 \end{equation}
 
-For each component $i \in \{1, \ldots, N\}$, we have
+\textbf{Operator constraints:} For each $\mathbf{A}_k$, by linearity:
 \begin{equation}
-    (\mathbf{A}\boldsymbol{\varepsilon}_t)_i = t(\mathbf{A}\boldsymbol{\varepsilon}_1)_i + (1-t)(\mathbf{A}\boldsymbol{\varepsilon}_2)_i.
+    |\mathbf{A}_k \mathbf{x}_t| = |t\mathbf{A}_k \mathbf{x}_1 + (1-t)\mathbf{A}_k \mathbf{x}_2| \le t|\mathbf{A}_k \mathbf{x}_1| + (1-t)|\mathbf{A}_k \mathbf{x}_2| \le t\mathbf{b}_k + (1-t)\mathbf{b}_k = \mathbf{b}_k.
 \end{equation}
 
-Since $t \geq 0$, $(1-t) \geq 0$, and $t + (1-t) = 1$, we can bound each component using the constraints on $\boldsymbol{\varepsilon}_1$ and $\boldsymbol{\varepsilon}_2$:
-\begin{align}
-    (\mathbf{A}\boldsymbol{\varepsilon}_t)_i &= t(\mathbf{A}\boldsymbol{\varepsilon}_1)_i + (1-t)(\mathbf{A}\boldsymbol{\varepsilon}_2)_i \leq t\Delta_i + (1-t)\Delta_i = \Delta_i, \\
-    (\mathbf{A}\boldsymbol{\varepsilon}_t)_i &= t(\mathbf{A}\boldsymbol{\varepsilon}_1)_i + (1-t)(\mathbf{A}\boldsymbol{\varepsilon}_2)_i \geq -t\Delta_i - (1-t)\Delta_i = -\Delta_i.
-\end{align}
-
-Thus, $-\Delta_i \leq (\mathbf{A}\boldsymbol{\varepsilon}_t)_i \leq \Delta_i$ for all $i \in \{1, \ldots, N\}$, which implies $\boldsymbol{\varepsilon}_t \in \mathcal{S}_{\text{output}}$. Since every convex combination of any two points in $\mathcal{S}_{\text{output}}$ remains in $\mathcal{S}_{\text{output}}$, the set $\mathcal{S}_{\text{output}}$ is convex.
+Thus $\mathbf{x}_t \in \mathcal{S}$, proving convexity.
 \end{proof}
 
-\begin{lemma}[Combined Spatial and Multiple Output Error Bounds]
-\label{lem:combined-bounds}
-Let $\mathbf{E} = (E_1, \ldots, E_N)^\top \in \mathbb{R}^N_{>0}$ be a vector of per-element spatial error bounds. For $m$ linear operators $\mathbf{A}_1, \ldots, \mathbf{A}_m \in \mathbb{R}^{N \times N}$, let $\boldsymbol{\Delta}^{(k)} = (\Delta_1^{(k)}, \ldots, \Delta_N^{(k)})^\top \in \mathbb{R}^N_{>0}$ be the vector of per-element output error bounds for operator $\mathbf{A}_k$, where $k \in \{1, \ldots, m\}$.
+\subsection*{Objection}
 
-If the spatial error $\boldsymbol{\varepsilon}$ must satisfy the spatial constraint
-\begin{equation}
-    -E_i \leq \varepsilon_i \leq E_i \quad \text{for all } i \in \{1, \ldots, N\}
-\end{equation}
-and the output error constraints
-\begin{equation}
-    -\Delta_i^{(k)} \leq (\mathbf{A}_k\boldsymbol{\varepsilon})_i \leq \Delta_i^{(k)} \quad \text{for all } i \in \{1, \ldots, N\}, \; k \in \{1, \ldots, m\},
-\end{equation}
-then the combined feasible region is
-\begin{equation}
-    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -E_i \leq \varepsilon_i \leq E_i \text{ and } -\Delta_i^{(k)} \leq (\mathbf{A}_k\boldsymbol{\varepsilon})_i \leq \Delta_i^{(k)} \text{ for all } i, k \right\},
-\end{equation}
-and this region is convex.
-\end{lemma}
+Let $\boldsymbol{\varepsilon}_0 = \tilde{\mathbf{x}} - \mathbf{x}$ denote the error vector after compressing and decompressing $\mathbf{x}$ by an error-bounded lossy compressor, where $\tilde{\mathbf{x}}$ is the reconstructed data. The compressor guarantees that the initial error $\boldsymbol{\varepsilon}_0$ satisfies the box constraint $|\boldsymbol{\varepsilon}_0| \le \mathbf{d}$, but may violate the operator constraints $|\mathbf{A}_k \boldsymbol{\varepsilon}_0| \le \mathbf{b}_k$. Our objective is to find a corrected error $\hat{\boldsymbol{\varepsilon}} \in \mathcal{S}$ that lies in the feasible region (Definition~\ref{def:multi-operator-constraints}) while minimizing the modification to $\boldsymbol{\varepsilon}_0$.
 
-\begin{proof}
-Define the spatial constraint set
-\begin{equation}
-    \mathcal{S}_{\text{space}} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -E_i \leq \varepsilon_i \leq E_i \text{ for all } i \in \{1, \ldots, N\} \right\}
-\end{equation}
-and the output constraint sets for each operator
-\begin{equation}
-    \mathcal{S}_{\text{output}}^{(k)} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i^{(k)} \leq (\mathbf{A}_k\boldsymbol{\varepsilon})_i \leq \Delta_i^{(k)} \text{ for all } i \in \{1, \ldots, N\} \right\}
-\end{equation}
-for $k \in \{1, \ldots, m\}$. The combined feasible region is the intersection
-\begin{equation}
-    \mathcal{S} = \mathcal{S}_{\text{space}} \cap \mathcal{S}_{\text{output}}^{(1)} \cap \cdots \cap \mathcal{S}_{\text{output}}^{(m)}.
-\end{equation}
-
-The set $\mathcal{S}_{\text{space}}$ is an axis-aligned hypercube in $\mathbb{R}^N$, which is convex. By Lemma~\ref{lem:convexity}, each set $\mathcal{S}_{\text{output}}^{(k)}$ is also convex for $k \in \{1, \ldots, m\}$. Since the intersection of finitely many convex sets is convex, we conclude that $\mathcal{S}$ is convex.
-\end{proof}
-
-\subsection*{Projection onto the Feasible Region}
-
-Consider the scenario where an error-bounded lossy compressor produces a reconstructed field with spatial error vector $\boldsymbol{\varepsilon}_0 = (\varepsilon_{0,1}, \ldots, \varepsilon_{0,N})^\top \in \mathbb{R}^N$ that satisfies the spatial constraint
-\begin{equation}
-    -E_i \leq \varepsilon_{0,i} \leq E_i \quad \text{for all } i \in \{1, \ldots, N\},
-\end{equation}
-but may violate the output error constraints imposed by the linear operators $\mathbf{A}_1, \ldots, \mathbf{A}_m$. Our objective is to find a corrected error vector $\hat{\boldsymbol{\varepsilon}} \in \mathcal{S}$ that lies in the combined feasible region (as defined in Lemma~\ref{lem:combined-bounds}) while minimizing the modification to $\boldsymbol{\varepsilon}_0$.
-
-\textbf{Definition (L0, L1, and L2 Norms):} For a vector $\mathbf{v} = (v_1, \ldots, v_N)^\top \in \mathbb{R}^N$, the L0, L1, and L2 norms are defined as follows:
-\begin{align}
-    \|\mathbf{v}\|_0 &= \left|\left\{ i \in \{1, \ldots, N\} \;\middle|\; v_i \neq 0 \right\}\right| \quad \text{(number of non-zero components)}, \\
-    \|\mathbf{v}\|_1 &= \sum_{i=1}^N |v_i| \quad \text{(sum of absolute values)}, \\
-    \|\mathbf{v}\|_2 &= \sqrt{\sum_{i=1}^N v_i^2} \quad \text{(Euclidean norm)}.
-\end{align}
-
-\textbf{Optimization Problems:} We formulate three versions of the projection problem, each minimizing a different norm of the modification $\hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0$.
-
-\textbf{L0 Minimization (Sparse Projection):}
-\begin{equation}
-\begin{aligned}
-    \min_{\hat{\boldsymbol{\varepsilon}}} \quad & \|\hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0\|_0 \\
-    \text{subject to} \quad & -E_i \leq \hat{\varepsilon}_i \leq E_i \quad \text{for all } i \in \{1, \ldots, N\}, \\
-    & -\Delta_i^{(k)} \leq (\mathbf{A}_k\hat{\boldsymbol{\varepsilon}})_i \leq \Delta_i^{(k)} \quad \text{for all } i \in \{1, \ldots, N\}, \; k \in \{1, \ldots, m\}.
-\end{aligned}
-\end{equation}
-This seeks to find the point in the feasible region $\mathcal{S}$ that differs from $\boldsymbol{\varepsilon}_0$ in the fewest number of components. \textbf{L0 minimization is NP-hard in general}, and the following convex relaxations are often used in practice.
-
-\textbf{L1 Minimization (Convex Relaxation):}
 \begin{equation}
 \begin{aligned}
     \min_{\hat{\boldsymbol{\varepsilon}}} \quad & \|\hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0\|_1 \\
-    \text{subject to} \quad & -E_i \leq \hat{\varepsilon}_i \leq E_i \quad \text{for all } i \in \{1, \ldots, N\}, \\
-    & -\Delta_i^{(k)} \leq (\mathbf{A}_k\hat{\boldsymbol{\varepsilon}})_i \leq \Delta_i^{(k)} \quad \text{for all } i \in \{1, \ldots, N\}, \; k \in \{1, \ldots, m\}.
+    \text{subject to} \quad & |\hat{\boldsymbol{\varepsilon}}| \le \mathbf{d}, \\
+    & |\mathbf{A}_k \hat{\boldsymbol{\varepsilon}}| \le \mathbf{b}_k \quad \text{for all } k \in \{1, \ldots, m\}.
 \end{aligned}
 \end{equation}
-This formulation is a linear program (LP) that can be solved efficiently using standard optimization solvers. The L1 norm promotes sparsity in the modification vector while remaining computationally tractable.
+This formulation is a linear program (LP) that can be solved efficiently. The L1 norm is chosen because it is the convex envelope of the L0 pseudo-norm on bounded domains, making it the tightest convex relaxation for minimizing the number of modified entries. While L1 minimization does not guarantee sparse solutions in general, it empirically tends to produce sparser modifications than L2 minimization, which distributes changes smoothly across all components.
 
-\textbf{L2 Minimization (Least-Squares Projection):}
+\subsection*{PDHG Solver}
+
+To apply the Primal-Dual Hybrid Gradient (PDHG) algorithm, we first transform the problem into standard form.
+
+\textbf{Step 1: Variable Substitution.} Let $\boldsymbol{\delta} = \hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0$ denote the modification vector. The problem becomes:
 \begin{equation}
 \begin{aligned}
-    \min_{\hat{\boldsymbol{\varepsilon}}} \quad & \|\hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0\|_2^2 \\
-    \text{subject to} \quad & -E_i \leq \hat{\varepsilon}_i \leq E_i \quad \text{for all } i \in \{1, \ldots, N\}, \\
-    & -\Delta_i^{(k)} \leq (\mathbf{A}_k\hat{\boldsymbol{\varepsilon}})_i \leq \Delta_i^{(k)} \quad \text{for all } i \in \{1, \ldots, N\}, \; k \in \{1, \ldots, m\}.
+    \min_{\boldsymbol{\delta}} \quad & \|\boldsymbol{\delta}\|_1 \\
+    \text{subject to} \quad & |\boldsymbol{\delta} + \boldsymbol{\varepsilon}_0| \le \mathbf{d}, \\
+    & |\mathbf{A}_k \boldsymbol{\delta} + \mathbf{A}_k \boldsymbol{\varepsilon}_0| \le \mathbf{b}_k \quad \text{for all } k \in \{1, \ldots, m\}.
 \end{aligned}
 \end{equation}
-This formulation is a quadratic program (QP) that finds the Euclidean projection of $\boldsymbol{\varepsilon}_0$ onto the convex feasible region $\mathcal{S}$. Since $\mathcal{S}$ is convex (Lemma~\ref{lem:combined-bounds}), this problem has a unique solution and can be solved efficiently using convex optimization techniques.
+
+\textbf{Step 2: Stack Operators.} Define the stacked operator matrix and offset vector:
+\begin{equation}
+    \mathbf{A} = \begin{bmatrix} \mathbf{A}_1 \\ \vdots \\ \mathbf{A}_m \end{bmatrix} \in \mathbb{R}^{mn \times n}, \quad
+    \mathbf{c} = \begin{bmatrix} \mathbf{A}_1 \boldsymbol{\varepsilon}_0 \\ \vdots \\ \mathbf{A}_m \boldsymbol{\varepsilon}_0 \end{bmatrix} = \mathbf{A} \boldsymbol{\varepsilon}_0 \in \mathbb{R}^{mn}, \quad
+    \mathbf{b} = \begin{bmatrix} \mathbf{b}_1 \\ \vdots \\ \mathbf{b}_m \end{bmatrix} \in \mathbb{R}^{mn}
+\end{equation}
+The operator constraints become a single constraint $|\mathbf{A}\boldsymbol{\delta} + \mathbf{c}| \le \mathbf{b}$.
+
+\textbf{Step 3: Linearize Absolute Value Constraints.} The constraint $|\mathbf{A}\boldsymbol{\delta} + \mathbf{c}| \le \mathbf{b}$ expands to:
+\begin{equation}
+    \mathbf{A}\boldsymbol{\delta} \le \mathbf{b} - \mathbf{c} \quad \text{and} \quad -\mathbf{A}\boldsymbol{\delta} \le \mathbf{b} + \mathbf{c}
+\end{equation}
+Similarly, the box constraint $|\boldsymbol{\delta} + \boldsymbol{\varepsilon}_0| \le \mathbf{d}$ becomes:
+\begin{equation}
+    \boldsymbol{\delta} \le \mathbf{d} - \boldsymbol{\varepsilon}_0 \quad \text{and} \quad -\boldsymbol{\delta} \le \mathbf{d} + \boldsymbol{\varepsilon}_0
+\end{equation}
+Define the asymmetric box bounds $\mathbf{l} = -\mathbf{d} - \boldsymbol{\varepsilon}_0$ and $\mathbf{u} = \mathbf{d} - \boldsymbol{\varepsilon}_0$, so the box constraint is $\mathbf{l} \le \boldsymbol{\delta} \le \mathbf{u}$.
+
+\textbf{Step 4: LP Reformulation.} Split the variable $\boldsymbol{\delta} = \boldsymbol{\delta}^+ - \boldsymbol{\delta}^-$ where $\boldsymbol{\delta}^+, \boldsymbol{\delta}^- \ge 0$. Introduce slack variables $\mathbf{s}_1, \mathbf{s}_2 \ge 0$ for the operator constraints. The LP becomes:
+\begin{equation}
+    \min_{\tilde{\boldsymbol{\delta}}} \mathbf{c}_{\text{obj}}^T \tilde{\boldsymbol{\delta}} \quad \text{subject to} \quad \tilde{\mathbf{A}}\tilde{\boldsymbol{\delta}} = \tilde{\mathbf{b}}, \quad \mathbf{0} \le \tilde{\boldsymbol{\delta}} \le \mathbf{U}
+\end{equation}
+where the block matrices are:
+\begin{equation}
+    \tilde{\boldsymbol{\delta}} = \begin{bmatrix} \boldsymbol{\delta}^+ \\ \boldsymbol{\delta}^- \\ \mathbf{s}_1 \\ \mathbf{s}_2 \end{bmatrix}, \quad
+    \mathbf{c}_{\text{obj}} = \begin{bmatrix} \mathbf{1}_n \\ \mathbf{1}_n \\ \mathbf{0}_{mn} \\ \mathbf{0}_{mn} \end{bmatrix}, \quad
+    \mathbf{U} = \begin{bmatrix} \mathbf{u} \\ -\mathbf{l} \\ \infty \\ \infty \end{bmatrix}
+\end{equation}
+\begin{equation}
+    \tilde{\mathbf{A}} = \begin{bmatrix} \mathbf{A} & -\mathbf{A} & \mathbf{I}_{mn} & \mathbf{0} \\ -\mathbf{A} & \mathbf{A} & \mathbf{0} & \mathbf{I}_{mn} \end{bmatrix}, \quad
+    \tilde{\mathbf{b}} = \begin{bmatrix} \mathbf{b} - \mathbf{c} \\ \mathbf{b} + \mathbf{c} \end{bmatrix}
+\end{equation}
+
+\textbf{Step 5: PDHG Algorithm.} Construct the Lagrangian with dual variables $\mathbf{y} \in \mathbb{R}^{2mn}$:
+\begin{equation}
+    L(\tilde{\boldsymbol{\delta}}, \mathbf{y}) = \mathbf{c}_{\text{obj}}^T \tilde{\boldsymbol{\delta}} - \mathbf{y}^T(\tilde{\mathbf{A}}\tilde{\boldsymbol{\delta}} - \tilde{\mathbf{b}})
+\end{equation}
+For iteration $k \ge 0$ with step sizes $\tau, \sigma > 0$:
+\begin{align}
+    \text{Primal update:} \quad & \tilde{\boldsymbol{\delta}}_{k+1} = \min\left(\mathbf{U}, \max\left(\mathbf{0}, \tilde{\boldsymbol{\delta}}_k - \tau (\mathbf{c}_{\text{obj}} - \tilde{\mathbf{A}}^T \mathbf{y}_k)\right)\right) \\
+    \text{Extrapolation:} \quad & \bar{\boldsymbol{\delta}}_{k+1} = 2\tilde{\boldsymbol{\delta}}_{k+1} - \tilde{\boldsymbol{\delta}}_k \\
+    \text{Dual update:} \quad & \mathbf{y}_{k+1} = \mathbf{y}_k + \sigma (\tilde{\mathbf{A}}\bar{\boldsymbol{\delta}}_{k+1} - \tilde{\mathbf{b}})
+\end{align}
+
+\textbf{Step 6: Recovery.} Upon convergence, recover the original solution:
+\begin{equation}
+    \boldsymbol{\delta} = \boldsymbol{\delta}^+ - \boldsymbol{\delta}^-, \quad \hat{\boldsymbol{\varepsilon}} = \boldsymbol{\delta} + \boldsymbol{\varepsilon}_0
+\end{equation}
 
 \end{document}

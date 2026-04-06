@@ -1,0 +1,271 @@
+% Conditions for Merging Multiple Operator Constraints
+% Supplement to feasible_region_lemmas.tex
+
+\documentclass{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{bm}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{example}{Example}
+\newtheorem{remark}{Remark}
+
+\title{Conditions for Merging Multiple Operator Constraints}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem Statement}
+
+Consider $m$ linear operators $\mathbf{A}_1, \ldots, \mathbf{A}_m \in \mathbb{R}^{n \times n}$ with corresponding per-element error bound vectors $\boldsymbol{\Delta}^{(1)}, \ldots, \boldsymbol{\Delta}^{(m)} \in \mathbb{R}^n_{>0}$. The combined constraint set is
+\begin{equation}
+    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i^{(k)} \leq (\mathbf{A}_k \boldsymbol{\varepsilon})_i \leq \Delta_i^{(k)} \text{ for all } i \in \{1, \ldots, N\}, \; k \in \{1, \ldots, m\} \right\}.
+\end{equation}
+
+We investigate conditions under which these $m$ constraints can be \emph{merged} into a single constraint of the form
+\begin{equation}
+    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i \leq (\mathbf{A} \boldsymbol{\varepsilon})_i \leq \Delta_i \text{ for all } i \in \{1, \ldots, N\} \right\}
+\end{equation}
+for some matrix $\mathbf{A} \in \mathbb{R}^{M \times N}$ and bound vector $\boldsymbol{\Delta} \in \mathbb{R}^M_{>0}$.
+
+\section{Cases Where Merging is Possible}
+
+\subsection{Case 1: Identical Matrices}
+
+\begin{proposition}[Identical Matrices]
+\label{prop:identical}
+If $\mathbf{A}_1 = \mathbf{A}_2 = \cdots = \mathbf{A}_m = \mathbf{A}$, then the combined constraint set $\mathcal{S}$ is equivalent to
+\begin{equation}
+    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i \leq (\mathbf{A} \boldsymbol{\varepsilon})_i \leq \Delta_i \text{ for all } i \in \{1, \ldots, N\} \right\},
+\end{equation}
+where
+\begin{equation}
+    \Delta_i = \min_{k \in \{1, \ldots, m\}} \Delta_i^{(k)}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+For each $i \in \{1, \ldots, N\}$, the constraints from all $m$ operators are
+\begin{equation}
+    -\Delta_i^{(k)} \leq (\mathbf{A} \boldsymbol{\varepsilon})_i \leq \Delta_i^{(k)} \quad \text{for } k = 1, \ldots, m.
+\end{equation}
+Since these all constrain the same quantity $(\mathbf{A} \boldsymbol{\varepsilon})_i$, their intersection is
+\begin{equation}
+    -\min_k \Delta_i^{(k)} \leq (\mathbf{A} \boldsymbol{\varepsilon})_i \leq \min_k \Delta_i^{(k)}.
+\end{equation}
+\end{proof}
+
+\subsection{Case 2: Proportional Matrices}
+
+\begin{proposition}[Proportional Matrices]
+\label{prop:proportional}
+If $\mathbf{A}_k = c_k \mathbf{A}_1$ for scalars $c_k > 0$ (with $c_1 = 1$), then the combined constraint set $\mathcal{S}$ is equivalent to
+\begin{equation}
+    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i \leq (\mathbf{A}_1 \boldsymbol{\varepsilon})_i \leq \Delta_i \text{ for all } i \in \{1, \ldots, N\} \right\},
+\end{equation}
+where
+\begin{equation}
+    \Delta_i = \min_{k \in \{1, \ldots, m\}} \frac{\Delta_i^{(k)}}{c_k}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+The constraint from operator $\mathbf{A}_k = c_k \mathbf{A}_1$ is
+\begin{equation}
+    |(\mathbf{A}_k \boldsymbol{\varepsilon})_i| = |c_k (\mathbf{A}_1 \boldsymbol{\varepsilon})_i| = c_k |(\mathbf{A}_1 \boldsymbol{\varepsilon})_i| \leq \Delta_i^{(k)},
+\end{equation}
+which is equivalent to
+\begin{equation}
+    |(\mathbf{A}_1 \boldsymbol{\varepsilon})_i| \leq \frac{\Delta_i^{(k)}}{c_k}.
+\end{equation}
+Taking the intersection over all $k$ yields the result.
+\end{proof}
+
+\begin{remark}
+Proposition~\ref{prop:identical} is a special case of Proposition~\ref{prop:proportional} with $c_k = 1$ for all $k$.
+\end{remark}
+
+\subsection{Case 3: Row-wise Proportionality}
+
+\begin{proposition}[Row-wise Proportionality]
+\label{prop:rowwise}
+Let $\mathbf{a}_i^{(k)} \in \mathbb{R}^N$ denote the $i$-th row of $\mathbf{A}_k$. If for each row index $i \in \{1, \ldots, N\}$, the rows across all matrices are proportional:
+\begin{equation}
+    \mathbf{a}_i^{(k)} = c_i^{(k)} \mathbf{a}_i^{(1)} \quad \text{for all } k \in \{1, \ldots, m\},
+\end{equation}
+where $c_i^{(k)} \neq 0$ are scalars (with $c_i^{(1)} = 1$), then the combined constraint set $\mathcal{S}$ is equivalent to
+\begin{equation}
+    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_i \leq (\mathbf{A}_1 \boldsymbol{\varepsilon})_i \leq \Delta_i \text{ for all } i \in \{1, \ldots, N\} \right\},
+\end{equation}
+where
+\begin{equation}
+    \Delta_i = \min_{k \in \{1, \ldots, m\}} \frac{\Delta_i^{(k)}}{|c_i^{(k)}|}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+For a fixed row index $i$, the constraint from operator $\mathbf{A}_k$ is
+\begin{equation}
+    |(\mathbf{A}_k \boldsymbol{\varepsilon})_i| = |(\mathbf{a}_i^{(k)})^\top \boldsymbol{\varepsilon}| = |c_i^{(k)} (\mathbf{a}_i^{(1)})^\top \boldsymbol{\varepsilon}| = |c_i^{(k)}| \cdot |(\mathbf{A}_1 \boldsymbol{\varepsilon})_i| \leq \Delta_i^{(k)}.
+\end{equation}
+This is equivalent to
+\begin{equation}
+    |(\mathbf{A}_1 \boldsymbol{\varepsilon})_i| \leq \frac{\Delta_i^{(k)}}{|c_i^{(k)}|}.
+\end{equation}
+Since all $m$ constraints bound the same linear functional $(\mathbf{A}_1 \boldsymbol{\varepsilon})_i$, their intersection is
+\begin{equation}
+    |(\mathbf{A}_1 \boldsymbol{\varepsilon})_i| \leq \min_{k} \frac{\Delta_i^{(k)}}{|c_i^{(k)}|}.
+\end{equation}
+Applying this to all rows $i \in \{1, \ldots, N\}$ yields the result.
+\end{proof}
+
+\begin{remark}
+Proposition~\ref{prop:proportional} is a special case of Proposition~\ref{prop:rowwise} where $c_i^{(k)} = c_k$ for all $i$ (i.e., the proportionality constant is the same for all rows).
+\end{remark}
+
+\begin{example}[Row-wise Proportionality]
+Consider two 1D forward difference operators on a grid of size $n = 4$ with circular boundary:
+\begin{equation}
+    \mathbf{A}_1 = \begin{pmatrix} -1 & 1 & 0 & 0 \\ 0 & -1 & 1 & 0 \\ 0 & 0 & -1 & 1 \\ 1 & 0 & 0 & -1 \end{pmatrix}, \quad
+    \mathbf{A}_2 = 2\mathbf{A}_1 = \begin{pmatrix} -2 & 2 & 0 & 0 \\ 0 & -2 & 2 & 0 \\ 0 & 0 & -2 & 2 \\ 2 & 0 & 0 & -2 \end{pmatrix}.
+\end{equation}
+Here $c_i^{(2)} = 2$ for all rows $i$. With bounds $\boldsymbol{\Delta}^{(1)} = (1, 1, 1, 1)^\top$ and $\boldsymbol{\Delta}^{(2)} = (3, 3, 3, 3)^\top$, the merged bound is
+\begin{equation}
+    \Delta_i = \min\left(\frac{1}{1}, \frac{3}{2}\right) = \min(1, 1.5) = 1 \quad \text{for all } i.
+\end{equation}
+Thus, we use $\mathbf{A} = \mathbf{A}_1$ with $\boldsymbol{\Delta} = (1, 1, 1, 1)^\top$.
+\end{example}
+
+\subsection{Case 4: Stacking with Dimension Change}
+
+\begin{proposition}[Stacking]
+\label{prop:stacking}
+For arbitrary matrices $\mathbf{A}_1, \ldots, \mathbf{A}_m \in \mathbb{R}^{N \times N}$, the combined constraint set $\mathcal{S}$ can always be represented as
+\begin{equation}
+    \mathcal{S} = \left\{ \boldsymbol{\varepsilon} \in \mathbb{R}^N \;\middle|\; -\Delta_j \leq (\mathbf{A} \boldsymbol{\varepsilon})_j \leq \Delta_j \text{ for all } j \in \{1, \ldots, mN\} \right\},
+\end{equation}
+where
+\begin{equation}
+    \mathbf{A} = \begin{pmatrix} \mathbf{A}_1 \\ \mathbf{A}_2 \\ \vdots \\ \mathbf{A}_m \end{pmatrix} \in \mathbb{R}^{mN \times N}, \quad
+    \boldsymbol{\Delta} = \begin{pmatrix} \boldsymbol{\Delta}^{(1)} \\ \boldsymbol{\Delta}^{(2)} \\ \vdots \\ \boldsymbol{\Delta}^{(m)} \end{pmatrix} \in \mathbb{R}^{mN}_{>0}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+The stacked constraint $|(\mathbf{A} \boldsymbol{\varepsilon})_j| \leq \Delta_j$ for $j \in \{1, \ldots, mN\}$ is equivalent to $|(\mathbf{A}_k \boldsymbol{\varepsilon})_i| \leq \Delta_i^{(k)}$ for all $i \in \{1, \ldots, N\}$ and $k \in \{1, \ldots, m\}$, where the index mapping is $j = (k-1)N + i$.
+\end{proof}
+
+\begin{remark}[Row Overlap and Redundancy]
+When rows overlap (identical or proportional rows exist across different matrices), the stacked representation contains redundant constraints. These can be simplified:
+\begin{itemize}
+    \item \textbf{Identical rows:} If $\mathbf{a}_i^{(k_1)} = \mathbf{a}_j^{(k_2)}$, the two constraints merge into one with bound $\min(\Delta_i^{(k_1)}, \Delta_j^{(k_2)})$.
+    \item \textbf{Proportional rows:} If $\mathbf{a}_i^{(k_1)} = c \cdot \mathbf{a}_j^{(k_2)}$ with $c > 0$, the constraints merge with bound $\min(\Delta_i^{(k_1)}/c, \Delta_j^{(k_2)})$ on the direction of $\mathbf{a}_j^{(k_2)}$.
+\end{itemize}
+After removing redundancies, the minimal stacked matrix $\mathbf{A}$ has one row per equivalence class of proportional rows.
+\end{remark}
+
+\section{Cases Where Merging is Not Possible}
+
+\begin{proposition}[Non-Mergeable Constraints]
+\label{prop:nonmergeable}
+If there exists a row index $i \in \{1, \ldots, N\}$ such that the rows $\mathbf{a}_i^{(1)}, \ldots, \mathbf{a}_i^{(m)}$ are \textbf{not all pairwise proportional}, then the combined constraint set $\mathcal{S}$ cannot be represented by a single matrix $\mathbf{A} \in \mathbb{R}^{N \times N}$ with bound vector $\boldsymbol{\Delta} \in \mathbb{R}^N_{>0}$.
+\end{proposition}
+
+\begin{proof}
+Suppose, for contradiction, that such a representation exists. Then row $i$ of $\mathbf{A}$, denoted $\mathbf{a}_i$, must satisfy the constraint $|(\mathbf{a}_i)^\top \boldsymbol{\varepsilon}| \leq \Delta_i$ that is equivalent to the intersection of
+\begin{equation}
+    |(\mathbf{a}_i^{(k)})^\top \boldsymbol{\varepsilon}| \leq \Delta_i^{(k)} \quad \text{for } k = 1, \ldots, m.
+\end{equation}
+
+Each constraint $|(\mathbf{a}_i^{(k)})^\top \boldsymbol{\varepsilon}| \leq \Delta_i^{(k)}$ defines a slab (the region between two parallel hyperplanes) in $\mathbb{R}^N$ perpendicular to the direction $\mathbf{a}_i^{(k)}$.
+
+If two rows $\mathbf{a}_i^{(k_1)}$ and $\mathbf{a}_i^{(k_2)}$ are not proportional, their corresponding slabs have \textbf{non-parallel} bounding hyperplanes. The intersection of these slabs is a more complex polytope that cannot be represented as a single slab $|(\mathbf{a}_i)^\top \boldsymbol{\varepsilon}| \leq \Delta_i$ for any choice of $\mathbf{a}_i$ and $\Delta_i$.
+\end{proof}
+
+\begin{example}[Gradient Operators $\mathbf{D}_x$ and $\mathbf{D}_y$]
+\label{ex:gradient}
+Consider a 2D scalar field on an $m \times n$ grid with partial derivative operators $\mathbf{D}_x, \mathbf{D}_y \in \mathbb{R}^{mn \times mn}$ constructed via central differences.
+
+For a grid point at position $(p, q)$ with linear index $i = pn + q$:
+\begin{itemize}
+    \item Row $i$ of $\mathbf{D}_x$ has non-zero entries at positions corresponding to horizontal neighbors (along the $x$-direction).
+    \item Row $i$ of $\mathbf{D}_y$ has non-zero entries at positions corresponding to vertical neighbors (along the $y$-direction).
+\end{itemize}
+
+These rows are \textbf{linearly independent} (not proportional) because they involve disjoint sets of grid points (except for the center point, which has coefficient 0 in central differences). Therefore, by Proposition~\ref{prop:nonmergeable}, the constraints
+\begin{align}
+    |(\mathbf{D}_x \boldsymbol{\varepsilon})_i| &\leq \Delta_i^{(x)}, \\
+    |(\mathbf{D}_y \boldsymbol{\varepsilon})_i| &\leq \Delta_i^{(y)}
+\end{align}
+\textbf{cannot} be merged into a single $mn \times mn$ matrix constraint.
+\end{example}
+
+\begin{figure}[h]
+\centering
+\textbf{Geometric Interpretation}
+
+\vspace{0.5cm}
+\begin{tabular}{cc}
+\textbf{Mergeable (Parallel Slabs)} & \textbf{Non-Mergeable (Non-Parallel Slabs)} \\[0.3cm]
+\begin{minipage}{0.4\textwidth}
+\centering
+Two constraints with proportional rows:\\[0.2cm]
+$|\mathbf{a}^\top \boldsymbol{\varepsilon}| \leq \Delta^{(1)}$\\
+$|c\mathbf{a}^\top \boldsymbol{\varepsilon}| \leq \Delta^{(2)}$\\[0.2cm]
+define parallel hyperplanes.\\
+Intersection is a single slab.
+\end{minipage}
+&
+\begin{minipage}{0.4\textwidth}
+\centering
+Two constraints with non-proportional rows:\\[0.2cm]
+$|\mathbf{a}^\top \boldsymbol{\varepsilon}| \leq \Delta^{(1)}$\\
+$|\mathbf{b}^\top \boldsymbol{\varepsilon}| \leq \Delta^{(2)}$\\[0.2cm]
+define non-parallel hyperplanes.\\
+Intersection is not a single slab.
+\end{minipage}
+\end{tabular}
+\end{figure}
+
+\section{Summary}
+
+\begin{table}[h]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Case} & \textbf{Condition} & \textbf{Merged $\mathbf{A}$} & \textbf{Merged $\Delta_i$} \\
+\hline
+1. Identical & $\mathbf{A}_k = \mathbf{A}_1 \; \forall k$ & $\mathbf{A}_1 \in \mathbb{R}^{N \times N}$ & $\displaystyle\min_k \Delta_i^{(k)}$ \\
+\hline
+2. Proportional & $\mathbf{A}_k = c_k \mathbf{A}_1 \; \forall k$ & $\mathbf{A}_1 \in \mathbb{R}^{N \times N}$ & $\displaystyle\min_k \frac{\Delta_i^{(k)}}{c_k}$ \\
+\hline
+3. Row-wise & $\mathbf{a}_i^{(k)} = c_i^{(k)} \mathbf{a}_i^{(1)} \; \forall i,k$ & $\mathbf{A}_1 \in \mathbb{R}^{N \times N}$ & $\displaystyle\min_k \frac{\Delta_i^{(k)}}{|c_i^{(k)}|}$ \\
+\hline
+4. Stacking & Always applicable & $[\mathbf{A}_1; \ldots; \mathbf{A}_m] \in \mathbb{R}^{mN \times N}$ & $[\boldsymbol{\Delta}^{(1)}; \ldots; \boldsymbol{\Delta}^{(m)}]$ \\
+\hline
+\hline
+\textbf{Not Possible} & $\exists i: \mathbf{a}_i^{(k)}$ not all proportional & \multicolumn{2}{c|}{Cannot use $\mathbf{A} \in \mathbb{R}^{N \times N}$} \\
+\hline
+\end{tabular}
+\caption{Summary of constraint merging conditions. Cases 1--3 preserve the output dimension $N$; Case 4 increases it to $mN$.}
+\end{table}
+
+\section{Practical Implications}
+
+For gradient-constrained lossy compression with multiple derivative operators (e.g., $\mathbf{D}_x$, $\mathbf{D}_y$, $\nabla^2$):
+
+\begin{enumerate}
+    \item \textbf{Same operator, multiple bounds:} Use Case 1 (take component-wise minimum).
+
+    \item \textbf{Scaled operators:} Use Case 2 or 3 (normalize and take minimum).
+
+    \item \textbf{Different operators} (e.g., $\mathbf{D}_x$ and $\mathbf{D}_y$): Must use Case 4 (stacking) or solve the multi-constraint optimization problem directly, as in Lemma~5 of the main document.
+\end{enumerate}
+
+The stacking approach (Case 4) is always valid but increases the number of constraints from $N$ to $mN$, which may impact computational efficiency in the projection optimization problem.
+
+\end{document}

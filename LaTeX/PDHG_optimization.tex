@@ -4,7 +4,7 @@
 \usepackage{geometry}
 \geometry{a4paper, margin=1in}
 
-\title{Reformulating $L_1$ Minimization and Applying PDHG}
+\title{Reformulating Constrained $L_1$ Minimization for GPU PDHG}
 \author{}
 \date{}
 
@@ -12,92 +12,97 @@
 
 \maketitle
 
-\section{Original Problem Definition}
-We aim to solve the following $L_1$ norm minimization problem subject to absolute value linear constraints:
+\section{Problem Definition}
+We aim to solve an $L_1$ norm minimization problem subject to both linear absolute value constraints and variable box constraints:
 \begin{equation}
-    \min_{x} \|x\|_1 \quad \text{subject to} \quad |Ax| \le b
+    \min_{x} \|x\|_1 \quad \text{subject to} \quad |Ax| \le b \quad \text{and} \quad |x| \le d
 \end{equation}
-where $x \in \mathbb{R}^n$, $A \in \mathbb{R}^{m \times n}$, and $b \in \mathbb{R}^m$.
+where $x, d \in \mathbb{R}^n$, $A \in \mathbb{R}^{m \times n}$, and $b \in \mathbb{R}^m$.
 
-\section{Conversion to Standard Linear Program}
-To solve this using standard solvers like cuPDLP, we must reformulate the problem into the standard Linear Program (LP) form:
-\begin{equation}
-    \min_{\tilde{x}} c^T \tilde{x} \quad \text{subject to} \quad \tilde{A}\tilde{x} = \tilde{b}, \quad \tilde{x} \ge 0
-\end{equation}
+\section{Standard Linear Program Reformulation}
+To optimize this efficiently on a GPU using first-order methods, we will reformulate the problem into a standard-form Linear Program (LP) with bounded variables. We achieve this by splitting the variables and linearizing the absolute constraints.
 
-\subsection{Variable Splitting ($L_1$ Objective)}
-Since $x$ can be negative, we split it into its positive and negative parts:
+\subsection{Variable Splitting and Bounding}
+We split the unbounded variable $x$ into strictly non-negative components ($x = x^+ - x^-$). Because the $L_1$ objective minimizes their sum ($\|x\|_1 = \sum (x_i^+ + x_i^-)$), they are perfectly complementary. Thus, the box constraint $|x| \le d$ simplifies directly into upper bounds:
 \begin{equation}
-    x = x^+ - x^-, \quad x^+ \ge 0, \quad x^- \ge 0
-\end{equation}
-Because the optimization minimizes the sum, $x^+$ and $x^-$ will never simultaneously be non-zero for the same index. Thus, the $L_1$ norm becomes a simple linear sum:
-\begin{equation}
-    \|x\|_1 = \sum_{i=1}^n (x_i^+ + x_i^-)
+    0 \le x^+ \le d \quad \text{and} \quad 0 \le x^- \le d
 \end{equation}
 
-\subsection{Splitting Absolute Value Constraints}
-The absolute value constraint $|Ax| \le b$ is equivalent to two separate linear inequalities:
+\subsection{Linearizing the Absolute Value Constraints}
+The constraint $|Ax| \le b$ expands into $A(x^+ - x^-) \le b$ and $-A(x^+ - x^-) \le b$. We introduce non-negative slack variables $s_1, s_2 \ge 0$ to convert these into exact equalities:
 \begin{align}
-    Ax &\le b \\
-    -Ax &\le b
-\end{align}
-Substituting $x = x^+ - x^-$ yields:
-\begin{align}
-    A(x^+ - x^-) &\le b \\
-    -A(x^+ - x^-) &\le b
+    A(x^+ - x^-) + s_1 &= b \\
+    -A(x^+ - x^-) + s_2 &= b
 \end{align}
 
-\subsection{Introducing Slack Variables}
-To convert the inequalities into exact equalities, we introduce non-negative slack variables $s_1 \in \mathbb{R}^m$ and $s_2 \in \mathbb{R}^m$:
-\begin{align}
-    A(x^+ - x^-) + s_1 &= b, \quad s_1 \ge 0 \\
-    -A(x^+ - x^-) + s_2 &= b, \quad s_2 \ge 0
-\end{align}
+\subsection{Block Matrix Assembly and Final LP}
+We stack all variables into a single vector $\tilde{x}$ and construct the corresponding cost vector $c$, upper bound vector $U$, constraint matrix $\tilde{A}$, and right-hand side $\tilde{b}$. 
 
-\subsection{Final Block Matrix Formulation}
-We now stack our variables into a single vector $\tilde{x} \ge 0$ and assemble the corresponding cost vector $c$, constraint matrix $\tilde{A}$, and right-hand side vector $\tilde{b}$:
+Given the original dimensions $n$ (variables) and $m$ (constraints), the new matrices have the following dimensions:
+\begin{itemize}
+    \item Variables and bounds: $\tilde{x}, c, U \in \mathbb{R}^{2n + 2m}$
+    \item Constraint matrix: $\tilde{A} \in \mathbb{R}^{2m \times (2n + 2m)}$
+    \item Right-hand side vector: $\tilde{b} \in \mathbb{R}^{2m}$
+\end{itemize}
 
+The block matrices are defined as:
 \begin{equation}
     \tilde{x} = \begin{bmatrix} x^+ \\ x^- \\ s_1 \\ s_2 \end{bmatrix}, \quad
-    c = \begin{bmatrix} \mathbf{1}_n \\ \mathbf{1}_n \\ \mathbf{0}_m \\ \mathbf{0}_m \end{bmatrix}
+    c = \begin{bmatrix} \mathbf{1}_n \\ \mathbf{1}_n \\ \mathbf{0}_m \\ \mathbf{0}_m \end{bmatrix}, \quad
+    U = \begin{bmatrix} d \\ d \\ \infty \\ \infty \end{bmatrix}
 \end{equation}
 
 \begin{equation}
     \tilde{A} = \begin{bmatrix} A & -A & I_m & 0 \\ -A & A & 0 & I_m \end{bmatrix}, \quad
     \tilde{b} = \begin{bmatrix} b \\ b \end{bmatrix}
 \end{equation}
-where $\mathbf{1}_n$ is a vector of ones of size $n$, $\mathbf{0}_m$ is a vector of zeros of size $m$, and $I_m$ is the $m \times m$ identity matrix.
+
+With these block components fully defined, our original $L_1$ minimization problem is now perfectly cast into the standard bounded Linear Program format:
+\begin{equation}
+    \min_{\tilde{x}} c^T \tilde{x} \quad \text{subject to} \quad \tilde{A}\tilde{x} = \tilde{b}, \quad 0 \le \tilde{x} \le U
+\end{equation}
 
 \section{Optimization via Primal-Dual Hybrid Gradient (PDHG)}
-With the problem in standard LP form, we apply the Chambolle-Pock PDHG algorithm.
-
-\subsection{The Lagrangian}
-We define the Lagrangian for the equality-constrained LP. Let $y \in \mathbb{R}^{2m}$ be the dual variables (Lagrange multipliers):
+We construct the Lagrangian for the equality constraints using dual variables $y \in \mathbb{R}^{2m}$:
 \begin{equation}
     L(\tilde{x}, y) = c^T \tilde{x} - y^T(\tilde{A}\tilde{x} - \tilde{b})
 \end{equation}
-The algorithm seeks a saddle point by taking gradient descent steps in the primal space ($\tilde{x}$) and gradient ascent steps in the dual space ($y$).
 
-\subsection{PDHG Iterations}
-For each iteration $k \ge 0$, given primal step size $\tau > 0$ and dual step size $\sigma > 0$, the updates are:
+The Chambolle-Pock PDHG algorithm finds the saddle point. For iteration $k \ge 0$, with step sizes $\tau > 0$ and $\sigma > 0$, the updates are:
 
-\textbf{1. Primal Update (Gradient Descent \& Projection):}
+\textbf{1. Primal Update (Gradient Descent \& Box Projection):}
 \begin{equation}
-    \tilde{x}_{k+1} = \max\left(0, \tilde{x}_k - \tau (c - \tilde{A}^T y_k)\right)
+    \tilde{x}_{k+1} = \min\left(U, \max\left(0, \tilde{x}_k - \tau (c - \tilde{A}^T y_k)\right)\right)
 \end{equation}
-Note: The $\max(0, \cdot)$ operator projects the solution back into the feasible non-negative space $\tilde{x} \ge 0$.
 
 \textbf{2. Extrapolation (Momentum):}
 \begin{equation}
     \bar{x}_{k+1} = 2\tilde{x}_{k+1} - \tilde{x}_k
 \end{equation}
-This over-relaxation step ensures convergence of the algorithm for bilinear saddle-point problems.
 
 \textbf{3. Dual Update (Gradient Ascent):}
 \begin{equation}
     y_{k+1} = y_k + \sigma (\tilde{A}\bar{x}_{k+1} - \tilde{b})
 \end{equation}
 
-Because these updates rely entirely on massive matrix-vector multiplications ($\tilde{A}^T y_k$ and $\tilde{A}\bar{x}_{k+1}$) rather than matrix factorizations, they map perfectly to GPU hardware via frameworks like cuPDLP.
+\section{Termination Criteria}
+To prevent the algorithm from running indefinitely, we periodically check for convergence by calculating the primal residual ($r_p$) and dual residual ($r_d$). 
+
+\textbf{1. Primal Residual (Feasibility):} Measures the violation of the equality constraints.
+\begin{equation}
+    r_p^{(k+1)} = \tilde{A}\tilde{x}_{k+1} - \tilde{b}
+\end{equation}
+
+\textbf{2. Dual Residual (Optimality):} Measures the violation of the stationarity condition. In PDHG, this is efficiently computed without extra matrix multiplications as:
+\begin{equation}
+    r_d^{(k+1)} = \frac{1}{\tau}(\tilde{x}_k - \tilde{x}_{k+1}) - \tilde{A}^T(y_k - y_{k+1})
+\end{equation}
+
+\textbf{3. Stopping Condition:} The solver terminates when the $L_2$ norms of both residuals fall below acceptable absolute ($\epsilon_{abs}$) and relative ($\epsilon_{rel}$) tolerances:
+\begin{align}
+    \|r_p^{(k+1)}\|_2 &\le \epsilon_{abs} + \epsilon_{rel} \max(\|\tilde{A}\tilde{x}_{k+1}\|_2, \|\tilde{b}\|_2) \\
+    \|r_d^{(k+1)}\|_2 &\le \epsilon_{abs} + \epsilon_{rel} \|c\|_2
+\end{align}
+Once these conditions are met, the algorithm stops, and the original optimal variable is recovered by calculating $x = x^+ - x^-$.
 
 \end{document}
