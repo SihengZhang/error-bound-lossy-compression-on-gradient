@@ -42,7 +42,7 @@
         "fine_tune": false,
         "fine_tune_threshold": 1e-3,
         "fine_tune_factor": 0.7,
-        "min_step": 1e-4,
+        "min_step": 1e-6,
 
         "_comment_acceleration": "Restart helps break stagnation",
         "backtrack": false,

@@ -518,6 +518,47 @@ class CuPyPDHGSolver:
             if self.adaptive and (iteration + 1) % 50 == 0:
                 self._adapt_step_sizes(primal_res, dual_res)
 
+            # Stuck detection: reduce step size when violations stop decreasing
+            total_viol = space_viol + grad_viol
+            if total_viol > 0 and self.tau > self.min_step:
+                if not hasattr(self, '_stuck_detection'):
+                    self._stuck_detection = {
+                        'last_viol': total_viol,
+                        'last_max_viol': max_viol,
+                        'stuck_count': 0,
+                        'last_reduce_iter': 0,
+                        'reduce_count': 0
+                    }
+                sd = self._stuck_detection
+
+                # Check if stuck (same or worse violations for many iterations)
+                stuck_threshold = 500  # iterations without improvement
+                cooldown = 1000  # minimum iterations between reductions
+
+                if total_viol >= sd['last_viol'] and max_viol >= sd['last_max_viol'] * 0.99:
+                    sd['stuck_count'] += 1
+                else:
+                    sd['stuck_count'] = 0
+                    sd['last_viol'] = total_viol
+                    sd['last_max_viol'] = max_viol
+
+                # Reduce step size if stuck for too long
+                if (sd['stuck_count'] >= stuck_threshold and
+                    iteration - sd['last_reduce_iter'] >= cooldown and
+                    sd['reduce_count'] < 10):  # Max 10 reductions
+
+                    old_tau = self.tau
+                    self.tau = max(self.tau * 0.5, self.min_step)
+                    self.sigma = max(self.sigma * 0.5, self.min_step)
+
+                    sd['stuck_count'] = 0
+                    sd['last_reduce_iter'] = iteration
+                    sd['reduce_count'] += 1
+
+                    if self.verbose:
+                        print(f"  [Stuck detection] No progress for {stuck_threshold} iters, "
+                              f"reducing tau: {old_tau:.2e} -> {self.tau:.2e}")
+
             # Fine-tuning: reduce step sizes when close to solution or stagnating
             total_viol = space_viol + grad_viol
             if self.fine_tune and self.tau > self.min_step:
