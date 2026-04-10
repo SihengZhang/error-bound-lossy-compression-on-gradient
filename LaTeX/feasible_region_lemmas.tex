@@ -9,7 +9,7 @@
 
 \begin{document}
 
-\begin{definition}[Linear Operators on Discrete Fields]
+\begin{definition}[Linear Operators on Data Arrays]
 \label{lem:linear-operator}
 Let $\mathbf{x} \in \mathbb{R}^n$ be a data array defined on a $d$-dimensional regular grid with dimensions $n_1 \times n_2 \times \cdots \times n_d$, where $n = \prod_{j=1}^d n_j$. The data values are stored in a flattened vector using row-major ordering.
 
@@ -22,9 +22,9 @@ for some matrix $\mathbf{A} \in \mathbb{R}^{n \times n}$. The choice of boundary
 
 \begin{definition}[Multi-Operator Constraints]
 \label{def:multi-operator-constraints}
-Given $m$ linear operators $\mathbf{A}_1, \ldots, \mathbf{A}_m \in \mathbb{R}^{n \times n}$ with corresponding per-element bound vectors $\mathbf{b}_1, \ldots, \mathbf{b}_m \in \mathbb{R}^n_{>0}$, and a box constraint bound $\mathbf{d} \in \mathbb{R}^n_{>0}$, the feasible region is:
+Given $m$ linear operators $\mathbf{A}_1, \ldots, \mathbf{A}_m \in \mathbb{R}^{n \times n}$ with corresponding per-element bound vectors $\mathbf{b}_k = \{(b_k)_i\}_{i=0}^{n-1} \in \mathbb{R}^n_{>0}$ for $k \in \{1, \ldots, m\}$, and a box constraint bound $\mathbf{d} = \{d_i\}_{i=0}^{n-1} \in \mathbb{R}^n_{>0}$, the feasible region for $\mathbf{x} = \{x_i\}_{i=0}^{n-1}$ is:
 \begin{equation}
-    \mathcal{S} = \left\{ \mathbf{x} \in \mathbb{R}^n \;\middle|\; |\mathbf{x}| \le \mathbf{d} \text{ and } |\mathbf{A}_k \mathbf{x}| \le \mathbf{b}_k \text{ for all } k \in \{1, \ldots, m\} \right\}
+    \mathcal{S} = \left\{ \mathbf{x} \in \mathbb{R}^n \;\middle|\; |x_i| \le d_i, \text{ and } |(\mathbf{A}_k \mathbf{x})_i| \le (b_k)_i, \text{ for } i \in \{0, \ldots, n-1\}, k \in \{1, \ldots, m\} \right\}
 \end{equation}
 \end{definition}
 
@@ -36,66 +36,76 @@ The feasible region $\mathcal{S}$ defined in Definition~\ref{def:multi-operator-
 \begin{proof}
 Let $\mathbf{x}_1, \mathbf{x}_2 \in \mathcal{S}$ and consider any convex combination $\mathbf{x}_t = t\mathbf{x}_1 + (1-t)\mathbf{x}_2$ for $t \in [0, 1]$.
 
-\textbf{Box constraint:} Since $|\mathbf{x}_1| \le \mathbf{d}$ and $|\mathbf{x}_2| \le \mathbf{d}$, by the triangle inequality:
+\textbf{Box constraint:} Since $|(x_1)_i| \le d_i$ and $|(x_2)_i| \le d_i$, by the triangle inequality:
 \begin{equation}
-    |\mathbf{x}_t| = |t\mathbf{x}_1 + (1-t)\mathbf{x}_2| \le t|\mathbf{x}_1| + (1-t)|\mathbf{x}_2| \le t\mathbf{d} + (1-t)\mathbf{d} = \mathbf{d}.
+    |(x_t)_i| = |t(x_1)_i + (1-t)(x_2)_i| \le t|(x_1)_i| + (1-t)|(x_2)_i| \le td_i + (1-t)d_i = d_i.
 \end{equation}
 
 \textbf{Operator constraints:} For each $\mathbf{A}_k$, by linearity:
 \begin{equation}
-    |\mathbf{A}_k \mathbf{x}_t| = |t\mathbf{A}_k \mathbf{x}_1 + (1-t)\mathbf{A}_k \mathbf{x}_2| \le t|\mathbf{A}_k \mathbf{x}_1| + (1-t)|\mathbf{A}_k \mathbf{x}_2| \le t\mathbf{b}_k + (1-t)\mathbf{b}_k = \mathbf{b}_k.
+    |(\mathbf{A}_k \mathbf{x}_t)_i| = |t(\mathbf{A}_k \mathbf{x}_1)_i + (1-t)(\mathbf{A}_k \mathbf{x}_2)_i| \le t|(\mathbf{A}_k \mathbf{x}_1)_i| + (1-t)|(\mathbf{A}_k \mathbf{x}_2)_i| \le t(b_k)_i + (1-t)(b_k)_i = (b_k)_i.
 \end{equation}
 
 Thus $\mathbf{x}_t \in \mathcal{S}$, proving convexity.
 \end{proof}
 
-\subsection*{Objection}
+\subsection*{Objective}
 
-Let $\boldsymbol{\varepsilon}_0 = \tilde{\mathbf{x}} - \mathbf{x}$ denote the error vector after compressing and decompressing $\mathbf{x}$ by an error-bounded lossy compressor, where $\tilde{\mathbf{x}}$ is the reconstructed data. The compressor guarantees that the initial error $\boldsymbol{\varepsilon}_0$ satisfies the box constraint $|\boldsymbol{\varepsilon}_0| \le \mathbf{d}$, but may violate the operator constraints $|\mathbf{A}_k \boldsymbol{\varepsilon}_0| \le \mathbf{b}_k$. Our objective is to find a corrected error $\hat{\boldsymbol{\varepsilon}} \in \mathcal{S}$ that lies in the feasible region (Definition~\ref{def:multi-operator-constraints}) while minimizing the modification to $\boldsymbol{\varepsilon}_0$.
+Let $\boldsymbol{\varepsilon}_0 = \{(\varepsilon_0)_i\}_{i=0}^{n-1} = \tilde{\mathbf{x}} - \mathbf{x}$ denote the error vector after compressing and decompressing $\mathbf{x}$ by an error-bounded lossy compressor, where $\tilde{\mathbf{x}}$ is the reconstructed data. Let $\mathbf{d} = \{d_i\}_{i=0}^{n-1} \in \mathbb{R}^n_{>0}$ be the box constraint bound and $\mathbf{b}_k = \{(b_k)_i\}_{i=0}^{n-1} \in \mathbb{R}^n_{>0}$ for $k \in \{1, \ldots, m\}$ be the operator constraint bounds. The compressor guarantees that the initial error $\boldsymbol{\varepsilon}_0$ satisfies the box constraint $|(\varepsilon_0)_i| \le d_i$, but may violate the operator constraints $|(\mathbf{A}_k \boldsymbol{\varepsilon}_0)_i| \le (b_k)_i$. Our objective is to find a corrected error $\hat{\boldsymbol{\varepsilon}} = \{\hat{\varepsilon}_i\}_{i=0}^{n-1} \in \mathcal{S}$ that lies in the feasible region (Definition~\ref{def:multi-operator-constraints}) while minimizing the number of modified entries:
 
 \begin{equation}
 \begin{aligned}
-    \min_{\hat{\boldsymbol{\varepsilon}}} \quad & \|\hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0\|_1 \\
-    \text{subject to} \quad & |\hat{\boldsymbol{\varepsilon}}| \le \mathbf{d}, \\
-    & |\mathbf{A}_k \hat{\boldsymbol{\varepsilon}}| \le \mathbf{b}_k \quad \text{for all } k \in \{1, \ldots, m\}.
+    \min_{\hat{\boldsymbol{\varepsilon}}} \quad & \#\left\{i : \hat{\varepsilon}_i \neq (\varepsilon_0)_i\right\} \\
+    \text{subject to} \quad & |\hat{\varepsilon}_i| \le d_i, \\
+    & |(\mathbf{A}_k \hat{\boldsymbol{\varepsilon}})_i| \le (b_k)_i.
 \end{aligned}
 \end{equation}
-This formulation is a linear program (LP) that can be solved efficiently. The L1 norm is chosen because it is the convex envelope of the L0 pseudo-norm on bounded domains, making it the tightest convex relaxation for minimizing the number of modified entries. While L1 minimization does not guarantee sparse solutions in general, it empirically tends to produce sparser modifications than L2 minimization, which distributes changes smoothly across all components.
+However, minimizing the number of modified entries is NP-hard in general, as it can be reduced from the subset sum problem or sparse recovery problems known to be computationally intractable.
+
+A standard approach is to relax the objective to the L1 norm, which is the convex envelope of the counting function on bounded domains:
+\begin{equation}
+\begin{aligned}
+    \min_{\hat{\boldsymbol{\varepsilon}}} \quad & \|\hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0\|_1 \\
+    \text{subject to} \quad & |\hat{\varepsilon}_i| \le d_i, \\
+    & |(\mathbf{A}_k \hat{\boldsymbol{\varepsilon}})_i| \le (b_k)_i.
+\end{aligned}
+\end{equation}
+This formulation is a linear program (LP) that can be solved efficiently. While L1 minimization does not guarantee sparse solutions in general, it is the tightest convex relaxation and empirically tends to produce sparser modifications than L2 minimization, which distributes changes smoothly across all components.
 
 \subsection*{PDHG Solver}
 
 To apply the Primal-Dual Hybrid Gradient (PDHG) algorithm, we first transform the problem into standard form.
 
-\textbf{Step 1: Variable Substitution.} Let $\boldsymbol{\delta} = \hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0$ denote the modification vector. The problem becomes:
+\textbf{Step 1: Variable Substitution.} Let $\boldsymbol{\delta} = \{\delta_i\}_{i=0}^{n-1} = \hat{\boldsymbol{\varepsilon}} - \boldsymbol{\varepsilon}_0$ denote the modification vector. The problem becomes:
 \begin{equation}
 \begin{aligned}
     \min_{\boldsymbol{\delta}} \quad & \|\boldsymbol{\delta}\|_1 \\
-    \text{subject to} \quad & |\boldsymbol{\delta} + \boldsymbol{\varepsilon}_0| \le \mathbf{d}, \\
-    & |\mathbf{A}_k \boldsymbol{\delta} + \mathbf{A}_k \boldsymbol{\varepsilon}_0| \le \mathbf{b}_k \quad \text{for all } k \in \{1, \ldots, m\}.
+    \text{subject to} \quad & |\delta_i + (\varepsilon_0)_i| \le d_i, \\
+    & |(\mathbf{A}_k \boldsymbol{\delta})_i + (\mathbf{A}_k \boldsymbol{\varepsilon}_0)_i| \le (b_k)_i.
 \end{aligned}
 \end{equation}
 
-\textbf{Step 2: Stack Operators.} Define the stacked operator matrix and offset vector:
+\textbf{Step 2: Stack Operators.} Define the stacked operator matrix and offset vector $\mathbf{c} = \{c_j\}_{j=0}^{mn-1}$, bound vector $\mathbf{b} = \{b_j\}_{j=0}^{mn-1}$:
 \begin{equation}
     \mathbf{A} = \begin{bmatrix} \mathbf{A}_1 \\ \vdots \\ \mathbf{A}_m \end{bmatrix} \in \mathbb{R}^{mn \times n}, \quad
     \mathbf{c} = \begin{bmatrix} \mathbf{A}_1 \boldsymbol{\varepsilon}_0 \\ \vdots \\ \mathbf{A}_m \boldsymbol{\varepsilon}_0 \end{bmatrix} = \mathbf{A} \boldsymbol{\varepsilon}_0 \in \mathbb{R}^{mn}, \quad
     \mathbf{b} = \begin{bmatrix} \mathbf{b}_1 \\ \vdots \\ \mathbf{b}_m \end{bmatrix} \in \mathbb{R}^{mn}
 \end{equation}
-The operator constraints become a single constraint $|\mathbf{A}\boldsymbol{\delta} + \mathbf{c}| \le \mathbf{b}$.
+The operator constraints become a single constraint $|(\mathbf{A}\boldsymbol{\delta})_j + c_j| \le b_j$.
 
-\textbf{Step 3: Linearize Absolute Value Constraints.} The constraint $|\mathbf{A}\boldsymbol{\delta} + \mathbf{c}| \le \mathbf{b}$ expands to:
+\textbf{Step 3: Linearize Absolute Value Constraints.} The constraint $|(\mathbf{A}\boldsymbol{\delta})_j + c_j| \le b_j$ expands to:
 \begin{equation}
-    \mathbf{A}\boldsymbol{\delta} \le \mathbf{b} - \mathbf{c} \quad \text{and} \quad -\mathbf{A}\boldsymbol{\delta} \le \mathbf{b} + \mathbf{c}
+    (\mathbf{A}\boldsymbol{\delta})_j \le b_j - c_j \quad \text{and} \quad -(\mathbf{A}\boldsymbol{\delta})_j \le b_j + c_j.
 \end{equation}
-Similarly, the box constraint $|\boldsymbol{\delta} + \boldsymbol{\varepsilon}_0| \le \mathbf{d}$ becomes:
+Similarly, the box constraint $|\delta_i + (\varepsilon_0)_i| \le d_i$ becomes:
 \begin{equation}
-    \boldsymbol{\delta} \le \mathbf{d} - \boldsymbol{\varepsilon}_0 \quad \text{and} \quad -\boldsymbol{\delta} \le \mathbf{d} + \boldsymbol{\varepsilon}_0
+    \delta_i \le d_i - (\varepsilon_0)_i \quad \text{and} \quad -\delta_i \le d_i + (\varepsilon_0)_i.
 \end{equation}
-Define the asymmetric box bounds $\mathbf{l} = -\mathbf{d} - \boldsymbol{\varepsilon}_0$ and $\mathbf{u} = \mathbf{d} - \boldsymbol{\varepsilon}_0$, so the box constraint is $\mathbf{l} \le \boldsymbol{\delta} \le \mathbf{u}$.
+Define the asymmetric box bounds $\mathbf{l} = \{l_i\}_{i=0}^{n-1}$ and $\mathbf{u} = \{u_i\}_{i=0}^{n-1}$ where $l_i = -d_i - (\varepsilon_0)_i$ and $u_i = d_i - (\varepsilon_0)_i$, so the box constraint is $l_i \le \delta_i \le u_i$.
 
-\textbf{Step 4: LP Reformulation.} Split the variable $\boldsymbol{\delta} = \boldsymbol{\delta}^+ - \boldsymbol{\delta}^-$ where $\boldsymbol{\delta}^+, \boldsymbol{\delta}^- \ge 0$. Introduce slack variables $\mathbf{s}_1, \mathbf{s}_2 \ge 0$ for the operator constraints. The LP becomes:
+\textbf{Step 4: LP Reformulation.} Split the variable $\boldsymbol{\delta} = \boldsymbol{\delta}^+ - \boldsymbol{\delta}^-$ where $\boldsymbol{\delta}^+ = \{\delta^+_i\}_{i=0}^{n-1} \ge 0$ and $\boldsymbol{\delta}^- = \{\delta^-_i\}_{i=0}^{n-1} \ge 0$. Introduce slack variables $\mathbf{s}_1 = \{(s_1)_j\}_{j=0}^{mn-1} \ge 0$ and $\mathbf{s}_2 = \{(s_2)_j\}_{j=0}^{mn-1} \ge 0$ for the operator constraints. The LP becomes:
 \begin{equation}
-    \min_{\tilde{\boldsymbol{\delta}}} \mathbf{c}_{\text{obj}}^T \tilde{\boldsymbol{\delta}} \quad \text{subject to} \quad \tilde{\mathbf{A}}\tilde{\boldsymbol{\delta}} = \tilde{\mathbf{b}}, \quad \mathbf{0} \le \tilde{\boldsymbol{\delta}} \le \mathbf{U}
+    \min_{\tilde{\boldsymbol{\delta}}} \mathbf{c}_{\text{obj}}^T \tilde{\boldsymbol{\delta}} \quad \text{subject to} \quad \tilde{\mathbf{A}}\tilde{\boldsymbol{\delta}} = \tilde{\mathbf{b}}, \quad 0 \le \tilde{\delta}_i \le U_i
 \end{equation}
 where the block matrices are:
 \begin{equation}
