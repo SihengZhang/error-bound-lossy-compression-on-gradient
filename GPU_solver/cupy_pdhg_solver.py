@@ -50,7 +50,7 @@ import json
 import time
 from datetime import datetime
 from io import StringIO
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 class TeeOutput:
@@ -131,15 +131,6 @@ class CuPyPDHGSolver:
                  primal_tol: float = 1e-6,
                  dual_tol: float = 1e-6,
                  bound_tol: float = 1e-6,
-                 adaptive: bool = True,
-                 adaptive_gamma: float = 0.5,
-                 adaptive_delta: float = 1.5,
-                 adaptive_eta: float = 0.95,
-                 fine_tune: bool = True,
-                 fine_tune_threshold: float = 1e-2,
-                 fine_tune_factor: float = 0.5,
-                 min_step: float = 1e-6,
-                 backtrack: bool = False,
                  restart: bool = True,
                  restart_interval: int = 100,
                  verbose: bool = True,
@@ -164,20 +155,7 @@ class CuPyPDHGSolver:
             dual_tol: Dual residual tolerance
             bound_tol: Tolerance for constraint violations
 
-        Adaptive Step Size Parameters:
-            adaptive: Enable adaptive step size adjustment (primal/dual balancing)
-            adaptive_gamma: Backtracking factor (< 1)
-            adaptive_delta: Growth factor (> 1)
-            adaptive_eta: Target ratio for balancing primal/dual
-
-        Fine-Tuning Parameters (for tight bound_tol):
-            fine_tune: Enable automatic step size reduction near solution
-            fine_tune_threshold: Reduce steps when max_viol < threshold
-            fine_tune_factor: Multiply step by this when entering fine-tune mode
-            min_step: Minimum step size (prevents steps from getting too small)
-
         Algorithm Variants:
-            backtrack: Enable backtracking line search
             restart: Enable adaptive restart for acceleration
             restart_interval: Check restart condition every N iterations
 
@@ -187,29 +165,15 @@ class CuPyPDHGSolver:
         """
         self.n = len(e0)
         self.theta = theta
-        self.theta_init = theta
         self.max_iter = max_iter
         self.tol = tol
         self.primal_tol = primal_tol if primal_tol else tol
         self.dual_tol = dual_tol if dual_tol else tol
         self.bound_tol = bound_tol
-        self.adaptive = adaptive
-        self.adaptive_gamma = adaptive_gamma
-        self.adaptive_delta = adaptive_delta
-        self.adaptive_eta = adaptive_eta
-        self.fine_tune = fine_tune
-        self.fine_tune_threshold = fine_tune_threshold
-        self.fine_tune_factor = fine_tune_factor
-        self.min_step = min_step
-        self.backtrack = backtrack
         self.restart = restart
         self.restart_interval = restart_interval
         self.verbose = verbose
         self.print_interval = print_interval
-
-        # Fine-tuning state
-        self.in_fine_tune_mode = False
-        self.fine_tune_level = 0  # Track how many times we've reduced steps
 
         # Store original error (target)
         self.e0 = e0
@@ -253,9 +217,6 @@ class CuPyPDHGSolver:
         else:
             self.tau = tau
             self.sigma = sigma
-
-        self.tau_init = self.tau
-        self.sigma_init = self.sigma
 
         # Initialize variables
         self.delta = cp.zeros(self.n, dtype=cp.float64)  # Primal: δ = ε̂ - ε₀
@@ -401,27 +362,6 @@ class CuPyPDHGSolver:
         primal_progress = cp.dot(delta_diff, self._apply_Kt(self.y - self.y_prev))
         return float(primal_progress) > 0  # Restart if positive (bad direction)
 
-    def _adapt_step_sizes(self, primal_res: float, dual_res: float):
-        """Adapt step sizes based on primal/dual residual ratio."""
-        if primal_res < 1e-15 or dual_res < 1e-15:
-            return
-
-        ratio = primal_res / dual_res
-
-        if ratio > 1.0 / self.adaptive_eta:
-            # Primal residual too large - decrease tau, increase sigma
-            self.tau *= self.adaptive_gamma
-            self.sigma /= self.adaptive_gamma
-        elif ratio < self.adaptive_eta:
-            # Dual residual too large - increase tau, decrease sigma
-            self.tau /= self.adaptive_gamma
-            self.sigma *= self.adaptive_gamma
-
-        # Ensure step sizes stay reasonable
-        max_step = 0.99 / self.K_norm
-        self.tau = min(self.tau, max_step)
-        self.sigma = min(self.sigma, max_step)
-
     def solve(self) -> cp.ndarray:
         """
         Run PDHG algorithm.
@@ -435,17 +375,12 @@ class CuPyPDHGSolver:
             print(f"  Constraints: {self.m_total:,}")
             print(f"  Step sizes: tau={self.tau:.6f}, sigma={self.sigma:.6f}")
             print(f"  theta={self.theta}, bound_tol={self.bound_tol:.2e}")
-            if self.adaptive:
-                print(f"  Adaptive step sizes: gamma={self.adaptive_gamma}, eta={self.adaptive_eta}")
-            if self.fine_tune:
-                print(f"  Fine-tuning: threshold={self.fine_tune_threshold:.0e}, "
-                      f"factor={self.fine_tune_factor}, min_step={self.min_step:.0e}")
             if self.restart:
                 print(f"  Adaptive restart: interval={self.restart_interval}")
             print()
             print(f"  {'Iter':>6} | {'Objective':>12} | {'Primal Res':>12} | {'Dual Res':>12} | "
-                  f"{'Max Viol':>12} | {'Space Viol':>10} | {'Grad Viol':>10} | {'tau':>10} | {'Time':>6}")
-            print(f"  {'-'*6}-+-{'-'*12}-+-{'-'*12}-+-{'-'*12}-+-{'-'*12}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*6}")
+                  f"{'Max Viol':>12} | {'Space Viol':>10} | {'Grad Viol':>10} | {'tau':>10} | {'sigma':>10} | {'Time':>6}")
+            print(f"  {'-'*6}-+-{'-'*12}-+-{'-'*12}-+-{'-'*12}-+-{'-'*12}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*10}-+-{'-'*6}")
 
         start_time = time.time()
         restart_count = 0
@@ -476,7 +411,7 @@ class CuPyPDHGSolver:
                 obj = self._compute_objective()
                 elapsed = time.time() - start_time
                 print(f"  {iteration+1:>6} | {obj:>12.4e} | {primal_res:>12.4e} | {dual_res:>12.4e} | "
-                      f"{max_viol:>12.4e} | {space_viol:>10,} | {grad_viol:>10,} | {self.tau:>10.2e} | {elapsed:>5.1f}s")
+                      f"{max_viol:>12.4e} | {space_viol:>10,} | {grad_viol:>10,} | {self.tau:>10.2e} | {self.sigma:>10.2e} | {elapsed:>5.1f}s")
 
             # Early stop: check feasibility first, then residuals
             # Primary criterion: all constraints satisfied (no violations)
@@ -485,7 +420,7 @@ class CuPyPDHGSolver:
                     obj = self._compute_objective()
                     elapsed = time.time() - start_time
                     print(f"  {iteration+1:>6} | {obj:>12.4e} | {primal_res:>12.4e} | {dual_res:>12.4e} | "
-                          f"{max_viol:>12.4e} | {space_viol:>10,} | {grad_viol:>10,} | {self.tau:>10.2e} | {elapsed:>5.1f}s")
+                          f"{max_viol:>12.4e} | {space_viol:>10,} | {grad_viol:>10,} | {self.tau:>10.2e} | {self.sigma:>10.2e} | {elapsed:>5.1f}s")
                     print()
                     print(f"  Converged at iteration {iteration + 1} (all constraints satisfied)")
                     print(f"  Restarts: {restart_count}")
@@ -497,7 +432,7 @@ class CuPyPDHGSolver:
                     obj = self._compute_objective()
                     elapsed = time.time() - start_time
                     print(f"  {iteration+1:>6} | {obj:>12.4e} | {primal_res:>12.4e} | {dual_res:>12.4e} | "
-                          f"{max_viol:>12.4e} | {space_viol:>10,} | {grad_viol:>10,} | {self.tau:>10.2e} | {elapsed:>5.1f}s")
+                          f"{max_viol:>12.4e} | {space_viol:>10,} | {grad_viol:>10,} | {self.tau:>10.2e} | {self.sigma:>10.2e} | {elapsed:>5.1f}s")
                     print()
                     print(f"  Converged at iteration {iteration + 1} (residuals below tolerance)")
                     print(f"  Restarts: {restart_count}")
@@ -513,152 +448,6 @@ class CuPyPDHGSolver:
             # Store for restart check
             self.delta_prev = delta_old
             self.y_prev = self.y.copy()
-
-            # Adaptive step sizes (primal/dual balancing)
-            if self.adaptive and (iteration + 1) % 50 == 0:
-                self._adapt_step_sizes(primal_res, dual_res)
-
-            # Stuck detection: reduce step size when violations stop decreasing
-            total_viol = space_viol + grad_viol
-            if total_viol > 0 and self.tau > self.min_step:
-                if not hasattr(self, '_stuck_detection'):
-                    self._stuck_detection = {
-                        'last_viol': total_viol,
-                        'last_max_viol': max_viol,
-                        'stuck_count': 0,
-                        'last_reduce_iter': 0,
-                        'reduce_count': 0
-                    }
-                sd = self._stuck_detection
-
-                # Check if stuck (same or worse violations for many iterations)
-                stuck_threshold = 500  # iterations without improvement
-                cooldown = 1000  # minimum iterations between reductions
-
-                if total_viol >= sd['last_viol'] and max_viol >= sd['last_max_viol'] * 0.99:
-                    sd['stuck_count'] += 1
-                else:
-                    sd['stuck_count'] = 0
-                    sd['last_viol'] = total_viol
-                    sd['last_max_viol'] = max_viol
-
-                # Reduce step size if stuck for too long
-                if (sd['stuck_count'] >= stuck_threshold and
-                    iteration - sd['last_reduce_iter'] >= cooldown and
-                    sd['reduce_count'] < 10):  # Max 10 reductions
-
-                    old_tau = self.tau
-                    self.tau = max(self.tau * 0.5, self.min_step)
-                    self.sigma = max(self.sigma * 0.5, self.min_step)
-
-                    sd['stuck_count'] = 0
-                    sd['last_reduce_iter'] = iteration
-                    sd['reduce_count'] += 1
-
-                    if self.verbose:
-                        print(f"  [Stuck detection] No progress for {stuck_threshold} iters, "
-                              f"reducing tau: {old_tau:.2e} -> {self.tau:.2e}")
-
-            # Fine-tuning: reduce step sizes when close to solution or stagnating
-            total_viol = space_viol + grad_viol
-            if self.fine_tune and self.tau > self.min_step:
-                should_fine_tune = False
-                reason = ""
-
-                # Track violation history for progress detection
-                if not hasattr(self, '_viol_history'):
-                    self._viol_history = []
-                    self._last_fine_tune_iter = 0
-                    self._last_fine_tune_viol = float('inf')
-                    self._best_viol = float('inf')
-                    self._best_max_viol = float('inf')
-
-                self._viol_history.append(total_viol)
-                if len(self._viol_history) > 2000:
-                    self._viol_history = self._viol_history[-2000:]
-
-                # Track best seen violations
-                if total_viol < self._best_viol:
-                    self._best_viol = total_viol
-                if max_viol < self._best_max_viol:
-                    self._best_max_viol = max_viol
-
-                # Strategy 1: Threshold-based (when max_viol drops below threshold)
-                current_threshold = self.fine_tune_threshold * (self.fine_tune_factor ** self.fine_tune_level)
-                if max_viol > 0 and max_viol < current_threshold:
-                    # Only trigger if we've improved since last fine-tune
-                    if max_viol < self._last_fine_tune_viol * 0.9:  # 10% improvement required
-                        should_fine_tune = True
-                        reason = f"threshold: max_viol={max_viol:.2e} < {current_threshold:.2e}"
-
-                # Strategy 2: Significant progress (violations dropped significantly)
-                if total_viol > 0 and total_viol <= self._last_fine_tune_viol * 0.5:
-                    # Violations halved since last fine-tune
-                    if (iteration - self._last_fine_tune_iter) > 200:  # Min cooldown
-                        should_fine_tune = True
-                        reason = f"progress: violations {self._last_fine_tune_viol:.0f} -> {total_viol}"
-
-                # Strategy 3: Long stagnation with tiny steps needed
-                # Only if we've been stuck for a long time AND violations are very few
-                if len(self._viol_history) >= 2000 and (iteration - self._last_fine_tune_iter) > 2000:
-                    recent = self._viol_history[-500:]
-                    old = self._viol_history[-2000:-1500]
-                    recent_min = min(recent)
-                    old_min = min(old)
-                    # Only fine-tune if we haven't improved the minimum at all
-                    if recent_min >= old_min and total_viol > 0 and total_viol <= 10:
-                        should_fine_tune = True
-                        reason = f"long stagnation: min_viol stuck at {recent_min}"
-
-                if should_fine_tune:
-                    self.fine_tune_level += 1
-                    self._last_fine_tune_iter = iteration
-                    self._last_adjust_iter = iteration
-                    self._last_fine_tune_viol = total_viol if total_viol > 0 else self._last_fine_tune_viol
-                    old_tau = self.tau
-
-                    # Reduce step sizes
-                    self.tau = max(self.tau * self.fine_tune_factor, self.min_step)
-                    self.sigma = max(self.sigma * self.fine_tune_factor, self.min_step)
-
-                    # Also reduce theta for more stable convergence
-                    self.theta = max(self.theta * self.fine_tune_factor, 0.1)
-
-                    if self.verbose:
-                        print(f"  [Fine-tune level {self.fine_tune_level}] {reason}, "
-                              f"tau: {old_tau:.2e} -> {self.tau:.2e}, theta: {self.theta:.2f}")
-
-                # Strategy 4: INCREASE step size if stuck for too long with small steps
-                # This helps escape when we fine-tuned too aggressively
-                if not hasattr(self, '_last_adjust_iter'):
-                    self._last_adjust_iter = 0
-
-                if (self.fine_tune_level > 0 and
-                    (iteration - self._last_adjust_iter) > 3000 and
-                    self.tau < self.tau_init * 0.5):  # Only if we've reduced steps significantly
-
-                    # Check if we're stuck (no improvement in min violations)
-                    if len(self._viol_history) >= 3000:
-                        recent_min = min(self._viol_history[-1000:])
-                        old_min = min(self._viol_history[-3000:-2000])
-
-                        # If minimum hasn't improved, try larger steps
-                        if recent_min >= old_min * 0.9 and total_viol > 0:
-                            self._last_adjust_iter = iteration
-                            old_tau = self.tau
-
-                            # Increase step sizes (but not beyond initial)
-                            increase_factor = 1.0 / self.fine_tune_factor  # e.g., 2.0
-                            self.tau = min(self.tau * increase_factor, self.tau_init)
-                            self.sigma = min(self.sigma * increase_factor, self.sigma_init)
-                            self.theta = min(self.theta * increase_factor, self.theta_init)
-
-                            if self.fine_tune_level > 0:
-                                self.fine_tune_level -= 1
-
-                            if self.verbose:
-                                print(f"  [Step increase] stuck for 3000 iters, min_viol {old_min}->{recent_min}, "
-                                      f"tau: {old_tau:.2e} -> {self.tau:.2e}, theta: {self.theta:.2f}")
 
         solve_time = time.time() - start_time
 
@@ -709,15 +498,6 @@ def load_config(config_path: str) -> Dict:
     pdhg.setdefault('primal_tol', None)       # Use tol if not set
     pdhg.setdefault('dual_tol', None)         # Use tol if not set
     pdhg.setdefault('bound_tol', 1e-6)
-    pdhg.setdefault('adaptive', True)
-    pdhg.setdefault('adaptive_gamma', 0.5)
-    pdhg.setdefault('adaptive_delta', 1.5)
-    pdhg.setdefault('adaptive_eta', 0.95)
-    pdhg.setdefault('fine_tune', True)
-    pdhg.setdefault('fine_tune_threshold', 1e-2)
-    pdhg.setdefault('fine_tune_factor', 0.5)
-    pdhg.setdefault('min_step', 1e-6)
-    pdhg.setdefault('backtrack', False)
     pdhg.setdefault('restart', True)
     pdhg.setdefault('restart_interval', 100)
     pdhg.setdefault('print_interval', 50)
@@ -746,7 +526,6 @@ def main():
     parser.add_argument('--max-iter', type=int, default=None, help='Maximum iterations')
     parser.add_argument('--tol', type=float, default=None, help='Convergence tolerance')
     parser.add_argument('--bound-tol', type=float, default=None, help='Constraint violation tolerance')
-    parser.add_argument('--no-adaptive', action='store_true', help='Disable adaptive step sizes')
     parser.add_argument('--no-restart', action='store_true', help='Disable adaptive restart')
     parser.add_argument('--output-dir', type=str, default=None, help='Output directory')
 
@@ -784,8 +563,6 @@ def main():
         pdhg_config['tol'] = args.tol
     if args.bound_tol is not None:
         pdhg_config['bound_tol'] = args.bound_tol
-    if args.no_adaptive:
-        pdhg_config['adaptive'] = False
     if args.no_restart:
         pdhg_config['restart'] = False
     if args.output_dir is not None:
@@ -897,15 +674,6 @@ def main():
             primal_tol=pdhg_config['primal_tol'],
             dual_tol=pdhg_config['dual_tol'],
             bound_tol=pdhg_config['bound_tol'],
-            adaptive=pdhg_config['adaptive'],
-            adaptive_gamma=pdhg_config['adaptive_gamma'],
-            adaptive_delta=pdhg_config['adaptive_delta'],
-            adaptive_eta=pdhg_config['adaptive_eta'],
-            fine_tune=pdhg_config['fine_tune'],
-            fine_tune_threshold=pdhg_config['fine_tune_threshold'],
-            fine_tune_factor=pdhg_config['fine_tune_factor'],
-            min_step=pdhg_config['min_step'],
-            backtrack=pdhg_config['backtrack'],
             restart=pdhg_config['restart'],
             restart_interval=pdhg_config['restart_interval'],
             verbose=verbose,
